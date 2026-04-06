@@ -43,8 +43,27 @@ class VisitorRepository(BaseRepository[Visitor]):
         return result.scalars().all(), total
 
     async def create_visitor(self, data: dict[str, Any]) -> Visitor:
+        data.setdefault("internal_exposure", None)
+        data.setdefault("external_exposure", None)
         obj = Visitor(**data)
         return await self.save(obj)
+
+    async def update_exposure(
+        self,
+        visitor_id: uuid.UUID,
+        scenario_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> Visitor | None:
+        visitor = await self.get_by_id(visitor_id, scenario_id=scenario_id)
+        if visitor is None:
+            return None
+
+        if "internal_exposure" in data:
+            visitor.internal_exposure = data["internal_exposure"]
+        if "external_exposure" in data:
+            visitor.external_exposure = data["external_exposure"]
+
+        return await self.save(visitor)
 
     async def get_density(
         self,
@@ -146,7 +165,16 @@ class VisitorTrackRepository(BaseRepository[VisitorTrack]):
         return result.scalars().all(), total
 
     async def create_track(
-        self, visitor_id: uuid.UUID, geojson: dict[str, Any]
+        self,
+        visitor_id: uuid.UUID,
+        geojson: dict[str, Any],
+        start_time: Any,
+        end_time: Any,
     ) -> VisitorTrack:
-        obj = VisitorTrack(visitor_id=visitor_id, geom=geojson_to_wkb(geojson))
+        obj = VisitorTrack(
+            visitor_id=visitor_id,
+            geom=geojson_to_wkb(geojson),
+            start_time=start_time,
+            end_time=end_time,
+        )
         return await self.save(obj)

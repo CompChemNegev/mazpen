@@ -49,6 +49,8 @@ class VisitorTrackCreate(BaseModel):
         ...,
         description='GeoJSON LineString: {"type":"LineString","coordinates":[[lon,lat],...]}',
     )
+    start_time: datetime
+    end_time: datetime
 
 
 class VisitorTrackResponse(BaseModel):
@@ -57,4 +59,35 @@ class VisitorTrackResponse(BaseModel):
     id: uuid.UUID
     visitor_id: uuid.UUID
     geom: Optional[dict[str, Any]]
-    recorded_at: datetime
+    start_time: datetime
+    end_time: datetime
+
+
+# ── VisitorExposure ───────────────────────────────────────────────────────────────
+
+class VisitorExposureCreate(BaseModel):
+    internal_exposure: float = Field(..., description="Internal exposure value for the visitor")
+    external_exposure: float = Field(..., description="External exposure value for the visitor")
+
+
+class VisitorExposureUpdate(BaseModel):
+    internal_exposure: float | None = Field(
+        default=None,
+        description="Updated internal exposure value for the visitor",
+    )
+    external_exposure: float | None = Field(
+        default=None,
+        description="Updated external exposure value for the visitor",
+    )
+
+
+class VisitorExposureResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    visitor_id: uuid.UUID
+    created_at: datetime
+    internal_exposure: float
+    external_exposure: float
+
+

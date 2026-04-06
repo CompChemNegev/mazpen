@@ -21,18 +21,11 @@ depends_on: str | None = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE scenario_type AS ENUM ('drill', 'real_event', 'training', 'other')")
-
     op.create_table(
         "scenarios",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("name", sa.String(length=100), nullable=False, unique=True),
-        sa.Column(
-            "type",
-            sa.Enum("drill", "real_event", "training", "other", name="scenario_type", create_type=False),
-            nullable=False,
-            server_default="drill",
-        ),
+        sa.Column("type", sa.String(length=50), nullable=False, server_default="drill"),
         sa.Column("description", sa.String(length=500), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
     )
@@ -92,4 +85,3 @@ def downgrade() -> None:
 
     op.drop_index("ix_scenarios_name", table_name="scenarios")
     op.drop_table("scenarios")
-    op.execute("DROP TYPE IF EXISTS scenario_type")

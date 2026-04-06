@@ -1,58 +1,34 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.measurement import Instrument, Measurement
+from app.models.measurement import Measurement
 from app.repositories.measurement_repository import (
-    InstrumentRepository,
     MeasurementRepository,
-    MeasurementTypeRepository,
 )
-from app.repositories.label_repository import LabelRepository, MeasurementLabelRepository
 from app.schemas.measurement import (
-    InstrumentCreate,
-    InstrumentUpdate,
     MeasurementCreate,
     MeasurementFilterParams,
     MeasurementUpdate,
 )
-from app.schemas.label import MeasurementLabelCreate
 from app.utils.exceptions import NotFoundException
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.schemas.filter import FilterQuery
 from app.repositories.base import BaseRepository
+from app.services.configured_value_service import ConfiguredValueService
+from app.services.base_service import BaseService
+from app.utils.physics_calculations import calculate_field
 
 
-class MeasurementService:
+class MeasurementService(BaseService):
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.repo = MeasurementRepository(db)
-        self.type_repo = MeasurementTypeRepository(db)
-        self.instrument_repo = InstrumentRepository(db)
-        self.label_repo = LabelRepository(db)
-        self.label_assoc_repo = MeasurementLabelRepository(db)
-
-    # ── Instrument ────────────────────────────────────────────────────────────
-
-    async def create_instrument(self, data: InstrumentCreate) -> Instrument:
-        obj = Instrument(**data.model_dump())
-        return await self.instrument_repo.save(obj)
-
-    async def update_instrument(
-        self, instrument_id: uuid.UUID, data: InstrumentUpdate
-    ) -> Instrument:
-        instrument = await self.instrument_repo.get_by_id(instrument_id)
-        if not instrument:
-            raise NotFoundException("Instrument not found")
-        for key, value in data.model_dump(exclude_unset=True).items():
-            setattr(instrument, key, value)
-        await self.db.flush()
-        await self.db.refresh(instrument)
-        return instrument
+        self.config_service = ConfiguredValueService(db)
 
     # ── Measurement ───────────────────────────────────────────────────────────
 
@@ -62,16 +38,41 @@ class MeasurementService:
         data: MeasurementCreate,
         event_publisher: Any = None,
     ) -> Measurement:
+        await self.config_service.assert_active_value(
+            category="measurement_type",
+            key=data.measurement_type,
+            field_name="measurement.measurement_type",
+        )
+        await self.config_service.assert_active_value(
+            category="instrument_type",
+            key=data.instrument_type,
+            field_name="measurement.instrument_type",
+        )
+        await self.config_service.assert_active_value(
+            category="measurement_unit",
+            key=data.unit,
+            field_name="measurement.unit",
+        )
+        await self.config_service.assert_active_value(
+            category="measurement_status",
+            key=data.status,
+            field_name="measurement.status",
+        )
+        if data.calculated_field_type is not None:
+            await self.config_service.assert_active_value(
+                category="calculated_field_type",
+                key=data.calculated_field_type,
+                field_name="measurement.calculated_field_type",
+            )
         payload = data.model_dump()
         payload["scenario_id"] = scenario_id
         measurement = await self.repo.create_measurement(payload)
-        # Reload with relations
         measurement = await self.repo.get_by_id(measurement.id, scenario_id=scenario_id)
         if event_publisher:
             await event_publisher(
                 {
                     "event": "measurement.created",
-                    "data": self._serialize(measurement),
+                    "data": self.serialize_for_event(measurement),
                 }
             )
         return measurement  # type: ignore[return-value]
@@ -102,23 +103,18 @@ class MeasurementService:
         )
         return list(items), total
 
-        async def search_measurements(
-            self,
-            scenario_id: uuid.UUID,
-            filter_query: FilterQuery,
-        ) -> list[Measurement]:
-            """
-            Search measurements using structured filters.
-        
-            This demonstrates the BaseRepository.filter_by() pattern with FilterQuery.
-            Provides flexible, type-safe filtering across any measurable field.
-            """
-            repo = BaseRepository(Measurement, self.db)
-            try:
-                results = await repo.filter_by(filter_query, scenario_id=scenario_id)
-            except ValueError as e:
-                raise NotFoundException(f"Invalid filter: {str(e)}")
-            return list(results)
+    async def search_measurements(
+        self,
+        scenario_id: uuid.UUID,
+        filter_query: FilterQuery,
+    ) -> list[Measurement]:
+        """Search measurements using structured filters."""
+        repo = BaseRepository(Measurement, self.db)
+        try:
+            results = await repo.filter_by(filter_query, scenario_id=scenario_id)
+        except ValueError as e:
+            raise NotFoundException(f"Invalid filter: {str(e)}")
+        return list(results)
 
     async def update_measurement(
         self,
@@ -127,7 +123,40 @@ class MeasurementService:
         data: MeasurementUpdate,
         event_publisher: Any = None,
     ) -> Measurement:
+        if data.measurement_type is not None:
+            await self.config_service.assert_active_value(
+                category="measurement_type",
+                key=data.measurement_type,
+                field_name="measurement.measurement_type",
+            )
+        if data.instrument_type is not None:
+            await self.config_service.assert_active_value(
+                category="instrument_type",
+                key=data.instrument_type,
+                field_name="measurement.instrument_type",
+            )
+        if data.unit is not None:
+            await self.config_service.assert_active_value(
+                category="measurement_unit",
+                key=data.unit,
+                field_name="measurement.unit",
+            )
+        if data.status is not None:
+            await self.config_service.assert_active_value(
+                category="measurement_status",
+                key=data.status,
+                field_name="measurement.status",
+            )
+        if data.calculated_field_type is not None:
+            await self.config_service.assert_active_value(
+                category="calculated_field_type",
+                key=data.calculated_field_type,
+                field_name="measurement.calculated_field_type",
+            )
         measurement = await self.get_measurement(scenario_id, measurement_id)
+        calculated_field_data = calculate_field(self.db, scenario_id, measurement_id)
+        data.calculated_field = calculated_field_data.calculated_field
+        data.calculated_field_type = calculated_field_data.calculated_field_type
         updated = await self.repo.update_measurement(
             measurement, data.model_dump(exclude_unset=True, exclude_none=True)
         )
@@ -136,7 +165,7 @@ class MeasurementService:
             await event_publisher(
                 {
                     "event": "measurement.updated",
-                    "data": self._serialize(updated),
+                    "data": self.serialize_for_event(updated),
                 }
             )
         return updated  # type: ignore[return-value]
@@ -145,34 +174,7 @@ class MeasurementService:
         measurement = await self.get_measurement(scenario_id, measurement_id)
         await self.repo.delete(measurement)
 
-    async def assign_label(
-        self,
-        scenario_id: uuid.UUID,
-        measurement_id: uuid.UUID,
-        body: MeasurementLabelCreate,
-        event_publisher: Any = None,
-    ) -> Any:
-        await self.get_measurement(scenario_id, measurement_id)
-        label = await self.label_repo.get_by_id(body.label_id, scenario_id=scenario_id)
-        if not label:
-            raise NotFoundException("Label not found")
-        assoc = await self.label_assoc_repo.assign_label(
-            measurement_id, body.label_id, body.reason
-        )
-        if event_publisher:
-            await event_publisher(
-                {
-                    "event": "label.assigned",
-                    "data": {
-                        "measurement_id": str(measurement_id),
-                        "label_id": str(body.label_id),
-                        "reason": body.reason,
-                    },
-                }
-            )
-        return assoc
-
-    def _serialize(self, m: Measurement | None) -> dict[str, Any]:
+    def serialize_for_event(self, m: Measurement | None) -> dict[str, Any]:
         if m is None:
             return {}
         return {
@@ -180,7 +182,13 @@ class MeasurementService:
             "scenario_id": str(m.scenario_id),
             "timestamp": m.timestamp.isoformat(),
             "location": wkb_to_geojson(m.location),
+            "measurement_type": m.measurement_type,
+            "instrument_type": m.instrument_type,
+            "status": m.status,
+            "team": m.team,
             "value": m.value,
             "unit": m.unit,
+            "calculated_field": m.calculated_field,
+            "calculated_field_type": m.calculated_field_type,
             "mission_id": str(m.mission_id) if m.mission_id else None,
         }

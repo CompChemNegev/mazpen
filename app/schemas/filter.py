@@ -2,29 +2,25 @@
 
 from typing import Any, Literal, Union
 from pydantic import BaseModel, field_validator
-from enum import Enum
-
-
-class FilterOperator(str, Enum):
-    """All supported filter operators."""
-    EQ = "eq"              # equals
-    NE = "ne"              # not equals
-    GT = "gt"              # greater than
-    GTE = "gte"            # greater than or equal
-    LT = "lt"              # less than
-    LTE = "lte"            # less than or equal
-    IN = "in"              # in list
-    NIN = "nin"            # not in list
-    CONTAINS = "contains"  # string contains (case-insensitive)
-    STARTSWITH = "startswith"  # string starts with
-    BETWEEN = "between"    # value between two numbers/dates
-    ISNULL = "isnull"      # is null / is not null
 
 
 class FilterCondition(BaseModel):
     """Single filter condition."""
     field: str
-    op: FilterOperator
+    op: Literal[
+        "eq",
+        "ne",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "in",
+        "nin",
+        "contains",
+        "startswith",
+        "between",
+        "isnull",
+    ]
     value: Union[str, int, float, bool, list[Any], None] = None
     
     @field_validator("field")
@@ -36,7 +32,7 @@ class FilterCondition(BaseModel):
         return v
     
     def __repr__(self):
-        return f"FilterCondition(field={self.field}, op={self.op.value}, value={self.value})"
+        return f"FilterCondition(field={self.field}, op={self.op}, value={self.value})"
 
 
 class FilterQuery(BaseModel):

@@ -3,19 +3,44 @@
 from __future__ import annotations
 
 import uuid
+from abc import ABC, abstractmethod
 from typing import Any, Generic, Sequence, Type, TypeVar
 
 from sqlalchemy import and_, or_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
-from app.schemas.filter import FilterQuery, FilterOperator
+from app.schemas.filter import FilterQuery
 from app.repositories.field_registry import FieldValidator
 
 ModelT = TypeVar("ModelT", bound=Base)
 
 
-class BaseRepository(Generic[ModelT]):
+class RepositoryContract(ABC, Generic[ModelT]):
+    """Repository contract to enforce coherent CRUD method signatures."""
+
+    @abstractmethod
+    async def get_by_id(self, record_id: uuid.UUID, scenario_id: uuid.UUID | None = None) -> ModelT | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_all(self, skip: int = 0, limit: int = 20, scenario_id: uuid.UUID | None = None) -> Sequence[ModelT]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create(self, data: dict) -> ModelT:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update(self, record_id: uuid.UUID, data: dict) -> ModelT | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_by_id(self, record_id: uuid.UUID) -> bool:
+        raise NotImplementedError
+
+
+class BaseRepository(RepositoryContract[ModelT], Generic[ModelT]):
     """Generic repository for any SQLAlchemy model with type-safe filtering."""
     
     def __init__(self, model: Type[ModelT], db: AsyncSession) -> None:
@@ -89,38 +114,38 @@ class BaseRepository(Generic[ModelT]):
             FieldValidator.validate_operation(
                 self.model, 
                 filter_cond.field, 
-                filter_cond.op.value, 
+                filter_cond.op, 
                 filter_cond.value
             )
             
             # Build SQLAlchemy expression
             column = getattr(self.model, filter_cond.field)
             
-            if filter_cond.op == FilterOperator.EQ:
+            if filter_cond.op == "eq":
                 conditions.append(column == filter_cond.value)
-            elif filter_cond.op == FilterOperator.NE:
+            elif filter_cond.op == "ne":
                 conditions.append(column != filter_cond.value)
-            elif filter_cond.op == FilterOperator.GT:
+            elif filter_cond.op == "gt":
                 conditions.append(column > filter_cond.value)
-            elif filter_cond.op == FilterOperator.GTE:
+            elif filter_cond.op == "gte":
                 conditions.append(column >= filter_cond.value)
-            elif filter_cond.op == FilterOperator.LT:
+            elif filter_cond.op == "lt":
                 conditions.append(column < filter_cond.value)
-            elif filter_cond.op == FilterOperator.LTE:
+            elif filter_cond.op == "lte":
                 conditions.append(column <= filter_cond.value)
-            elif filter_cond.op == FilterOperator.IN:
+            elif filter_cond.op == "in":
                 conditions.append(column.in_(filter_cond.value))
-            elif filter_cond.op == FilterOperator.NIN:
+            elif filter_cond.op == "nin":
                 conditions.append(~column.in_(filter_cond.value))
-            elif filter_cond.op == FilterOperator.CONTAINS:
+            elif filter_cond.op == "contains":
                 # Use ILIKE for case-insensitive substring
                 conditions.append(column.ilike(f"%{filter_cond.value}%"))
-            elif filter_cond.op == FilterOperator.STARTSWITH:
+            elif filter_cond.op == "startswith":
                 conditions.append(column.ilike(f"{filter_cond.value}%"))
-            elif filter_cond.op == FilterOperator.BETWEEN:
+            elif filter_cond.op == "between":
                 min_val, max_val = filter_cond.value
                 conditions.append(column.between(min_val, max_val))
-            elif filter_cond.op == FilterOperator.ISNULL:
+            elif filter_cond.op == "isnull":
                 if filter_cond.value:
                     conditions.append(column.is_(None))
                 else:

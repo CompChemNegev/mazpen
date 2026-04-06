@@ -5,22 +5,23 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.mission import Mission, MissionInstrumentAssignment
-from app.repositories.measurement_repository import InstrumentRepository
+from app.models.mission import Mission
 from app.repositories.mission_repository import MissionRepository
-from app.schemas.mission import MissionAssignmentCreate, MissionCreate, MissionUpdate
+from app.schemas.mission import MissionCreate, MissionUpdate
 from app.utils.exceptions import NotFoundException
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.schemas.filter import FilterQuery
 from app.repositories.base import BaseRepository
+from app.services.configured_value_service import ConfiguredValueService
+from app.services.base_service import BaseService
 
 
-class MissionService:
+class MissionService(BaseService):
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.repo = MissionRepository(db)
-        self.instrument_repo = InstrumentRepository(db)
+        self.config_service = ConfiguredValueService(db)
 
     async def create_mission(
         self,
@@ -28,6 +29,17 @@ class MissionService:
         data: MissionCreate,
         event_publisher: Any = None,
     ) -> Mission:
+        await self.config_service.assert_active_value(
+            category="mission_status",
+            key=data.status,
+            field_name="mission.status",
+        )
+        if data.instrument_type is not None:
+            await self.config_service.assert_active_value(
+                category="instrument_type",
+                key=data.instrument_type,
+                field_name="mission.instrument_type",
+            )
         payload = data.model_dump()
         payload["scenario_id"] = scenario_id
         mission = await self.repo.create_mission(payload)
@@ -35,11 +47,7 @@ class MissionService:
             await event_publisher(
                 {
                     "event": "mission.created",
-                    "data": {
-                        "id": str(mission.id),
-                        "scenario_id": str(scenario_id),
-                        "name": mission.name,
-                    },
+                    "data": self.serialize_for_event(mission),
                 }
             )
         return mission
@@ -62,18 +70,18 @@ class MissionService:
         )
         return list(items), total
 
-        async def search_missions(
-            self,
-            scenario_id: uuid.UUID,
-            filter_query: FilterQuery,
-        ) -> list[Mission]:
-            """Search missions using structured filters."""
-            repo = BaseRepository(Mission, self.db)
-            try:
-                results = await repo.filter_by(filter_query, scenario_id=scenario_id)
-            except ValueError as e:
-                raise NotFoundException(f"Invalid filter: {str(e)}")
-            return list(results)
+    async def search_missions(
+        self,
+        scenario_id: uuid.UUID,
+        filter_query: FilterQuery,
+    ) -> list[Mission]:
+        """Search missions using structured filters."""
+        repo = BaseRepository(Mission, self.db)
+        try:
+            results = await repo.filter_by(filter_query, scenario_id=scenario_id)
+        except ValueError as e:
+            raise NotFoundException(f"Invalid filter: {str(e)}")
+        return list(results)
 
     async def update_mission(
         self,
@@ -82,6 +90,18 @@ class MissionService:
         data: MissionUpdate,
         event_publisher: Any = None,
     ) -> Mission:
+        if data.status is not None:
+            await self.config_service.assert_active_value(
+                category="mission_status",
+                key=data.status,
+                field_name="mission.status",
+            )
+        if data.instrument_type is not None:
+            await self.config_service.assert_active_value(
+                category="instrument_type",
+                key=data.instrument_type,
+                field_name="mission.instrument_type",
+            )
         mission = await self.get_mission(scenario_id, mission_id)
         updated = await self.repo.update_mission(
             mission, data.model_dump(exclude_unset=True, exclude_none=True)
@@ -90,11 +110,7 @@ class MissionService:
             await event_publisher(
                 {
                     "event": "mission.updated",
-                    "data": {
-                        "id": str(updated.id),
-                        "scenario_id": str(scenario_id),
-                        "status": updated.status,
-                    },
+                    "data": self.serialize_for_event(updated),
                 }
             )
         return updated
@@ -103,14 +119,15 @@ class MissionService:
         mission = await self.get_mission(scenario_id, mission_id)
         await self.repo.delete(mission)
 
-    async def add_assignment(
-        self,
-        scenario_id: uuid.UUID,
-        mission_id: uuid.UUID,
-        body: MissionAssignmentCreate,
-    ) -> MissionInstrumentAssignment:
-        await self.get_mission(scenario_id, mission_id)
-        instrument = await self.instrument_repo.get_by_id(body.instrument_id)
-        if not instrument:
-            raise NotFoundException("Instrument not found")
-        return await self.repo.add_assignment(mission_id, body.instrument_id)
+    def serialize_for_event(self, m: Mission | None) -> dict[str, Any]:
+        if m is None:
+            return {}
+        return {
+            "id": str(m.id),
+            "scenario_id": str(m.scenario_id),
+            "name": m.name,
+            "status": m.status,
+            "instrument_type": m.instrument_type,
+            "team_id": str(m.team_id) if m.team_id else None,
+            "target_area": wkb_to_geojson(m.target_area),
+        }

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import AdminOrOperator, CurrentScenario, CurrentUser
 from app.core.database import get_db
 from app.schemas.common import PaginatedResponse
+from app.schemas.filter import FilterQuery
 from app.schemas.visitor import (
     BodyMeasurementCreate,
     BodyMeasurementResponse,
@@ -20,7 +21,6 @@ from app.services.visitor_service import VisitorService
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.websocket.connection_manager import event_bus
-from app.schemas.filter import FilterQuery
 
 router = APIRouter(prefix="/{scenario_name}/visitors", tags=["Visitors"])
 tracks_router = APIRouter(prefix="/{scenario_name}/visitor-tracks", tags=["Visitor Tracks"])
@@ -31,11 +31,10 @@ def _track_to_response(t) -> VisitorTrackResponse:
         id=t.id,
         visitor_id=t.visitor_id,
         geom=wkb_to_geojson(t.geom),
-        recorded_at=t.recorded_at,
+        start_time=t.start_time,
+        end_time=t.end_time,
     )
 
-
-# ── Visitors ──────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=VisitorResponse, status_code=status.HTTP_201_CREATED)
 async def create_visitor(
@@ -44,6 +43,7 @@ async def create_visitor(
     scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> VisitorResponse:
+    """Create visitor in scenario."""
     svc = VisitorService(db)
     result = await svc.create_visitor(scenario.id, body)
     return VisitorResponse.model_validate(result)
@@ -57,24 +57,25 @@ async def list_visitors(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> PaginatedResponse[VisitorResponse]:
+    """List visitors in scenario."""
     pagination = PaginationParams(page=page, limit=limit)
     svc = VisitorService(db)
     items, total = await svc.list_visitors(scenario.id, pagination)
-    responses = [VisitorResponse.model_validate(v) for v in items]
-    return PaginatedResponse.create(items=responses, total=total, params=pagination)
+    return PaginatedResponse.create(items=[VisitorResponse.model_validate(v) for v in items], total=total, params=pagination)
 
 
-    @router.post("/search", response_model=list[VisitorResponse])
-    async def search_visitors(
-        body: FilterQuery,
-        _: CurrentUser,
-        scenario: CurrentScenario,
-        db: AsyncSession = Depends(get_db),
-    ) -> list[VisitorResponse]:
-        """Search visitors using structured filters."""
-        svc = VisitorService(db)
-        items = await svc.search_visitors(scenario.id, body)
-        return [VisitorResponse.model_validate(v) for v in items]
+@router.post("/search", response_model=list[VisitorResponse])
+async def search_visitors(
+    body: FilterQuery,
+    _: CurrentUser,
+    scenario: CurrentScenario,
+    db: AsyncSession = Depends(get_db),
+) -> list[VisitorResponse]:
+    """Search visitors using structured FilterQuery payload."""
+    svc = VisitorService(db)
+    items = await svc.search_visitors(scenario.id, body)
+    return [VisitorResponse.model_validate(v) for v in items]
+
 
 @router.get("/{visitor_id}", response_model=VisitorResponse)
 async def get_visitor(
@@ -83,12 +84,11 @@ async def get_visitor(
     scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> VisitorResponse:
+    """Get visitor by id."""
     svc = VisitorService(db)
     result = await svc.get_visitor(scenario.id, visitor_id)
     return VisitorResponse.model_validate(result)
 
-
-# ── Body Measurements ─────────────────────────────────────────────────────────
 
 @router.post(
     "/{visitor_id}/body-measurements",
@@ -102,6 +102,7 @@ async def create_body_measurement(
     scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> BodyMeasurementResponse:
+    """Create body measurement for visitor."""
     svc = VisitorService(db)
     result = await svc.create_body_measurement(scenario.id, visitor_id, body)
     return BodyMeasurementResponse.model_validate(result)
@@ -114,12 +115,11 @@ async def list_body_measurements(
     scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> list[BodyMeasurementResponse]:
+    """List body measurements for visitor."""
     svc = VisitorService(db)
     items = await svc.list_body_measurements(scenario.id, visitor_id)
     return [BodyMeasurementResponse.model_validate(m) for m in items]
 
-
-# ── Visitor Tracks ────────────────────────────────────────────────────────────
 
 @router.post(
     "/{visitor_id}/tracks",
@@ -134,6 +134,7 @@ async def create_visitor_track(
     scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> VisitorTrackResponse:
+    """Create visitor stay/track interval."""
     svc = VisitorService(db)
 
     async def publish(event: dict) -> None:
@@ -150,12 +151,11 @@ async def list_visitor_tracks(
     scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> list[VisitorTrackResponse]:
+    """List tracks for visitor."""
     svc = VisitorService(db)
     items = await svc.list_tracks(scenario.id, visitor_id)
     return [_track_to_response(t) for t in items]
 
-
-# ── Global Tracks ─────────────────────────────────────────────────────────────
 
 @tracks_router.get("", response_model=PaginatedResponse[VisitorTrackResponse])
 async def list_all_tracks(
@@ -165,8 +165,8 @@ async def list_all_tracks(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> PaginatedResponse[VisitorTrackResponse]:
+    """List all tracks in scenario."""
     pagination = PaginationParams(page=page, limit=limit)
     svc = VisitorService(db)
     items, total = await svc.list_all_tracks(scenario.id, pagination)
-    responses = [_track_to_response(t) for t in items]
-    return PaginatedResponse.create(items=responses, total=total, params=pagination)
+    return PaginatedResponse.create(items=[_track_to_response(t) for t in items], total=total, params=pagination)

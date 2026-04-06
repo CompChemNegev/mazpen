@@ -11,10 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.scenario import Scenario
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.repositories.measurement_repository import ScenarioRepository
 from app.repositories.user_repository import UserRepository
 from app.utils.exceptions import ForbiddenException, NotFoundException, UnauthorizedException
+
+ROLE_ADMIN = "admin"
+ROLE_OPERATOR = "operator"
+ROLE_VIEWER = "viewer"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
@@ -38,13 +42,13 @@ async def get_current_user(
     return user
 
 
-def require_roles(*roles: UserRole):
+def require_roles(*roles: str):
     """Role guard — returns a dependency that enforces at least one of the given roles."""
 
     async def _check(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        if current_user.role not in roles:
+        if str(current_user.role).lower() not in {r.lower() for r in roles}:
             raise ForbiddenException("Insufficient permissions for this operation")
         return current_user
 
@@ -63,6 +67,6 @@ async def get_scenario(
 
 # Convenience aliases
 CurrentUser = Annotated[User, Depends(get_current_user)]
-AdminOrOperator = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.OPERATOR))]
-AdminOnly = Annotated[User, Depends(require_roles(UserRole.ADMIN))]
+AdminOrOperator = Annotated[User, Depends(require_roles(ROLE_ADMIN, ROLE_OPERATOR))]
+AdminOnly = Annotated[User, Depends(require_roles(ROLE_ADMIN))]
 CurrentScenario = Annotated[Scenario, Depends(get_scenario)]

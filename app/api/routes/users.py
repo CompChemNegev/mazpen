@@ -13,6 +13,7 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.services.configured_value_service import ConfiguredValueService
 from app.utils.exceptions import ConflictException, NotFoundException
 from app.utils.pagination import PaginationParams
 
@@ -25,6 +26,14 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     repo = UserRepository(db)
+    config_service = ConfiguredValueService(db)
+
+    await config_service.assert_active_value(
+        category="user_role",
+        key=body.role,
+        field_name="user.role",
+    )
+
     existing = await repo.get_by_email(body.email)
     if existing:
         raise ConflictException("A user with this email already exists")
@@ -56,9 +65,16 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     repo = UserRepository(db)
+    config_service = ConfiguredValueService(db)
     user = await repo.get_by_id(user_id)
     if not user:
         raise NotFoundException("User not found")
+    if body.role is not None:
+        await config_service.assert_active_value(
+            category="user_role",
+            key=body.role,
+            field_name="user.role",
+        )
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(user, key, value)
     await repo.save(user)

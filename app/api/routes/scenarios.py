@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.scenario import Scenario
 from app.repositories.measurement_repository import ScenarioRepository
 from app.schemas.scenario import ScenarioCreate, ScenarioResponse
+from app.services.configured_value_service import ConfiguredValueService
 from app.utils.exceptions import ConflictException, NotFoundException
 
 router = APIRouter(prefix="/scenarios", tags=["Scenarios"])
@@ -20,6 +21,14 @@ async def create_scenario(
     db: AsyncSession = Depends(get_db),
 ) -> ScenarioResponse:
     repo = ScenarioRepository(db)
+    config_service = ConfiguredValueService(db)
+
+    await config_service.assert_active_value(
+        category="scenario_type",
+        key=body.type,
+        field_name="scenario.type",
+    )
+
     existing = await repo.get_by_name(body.name)
     if existing:
         raise ConflictException(f"Scenario '{body.name}' already exists")

@@ -24,14 +24,6 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis_topology")
 
-    # ── Enums ────────────────────────────────────────────────────────────────
-    op.execute(
-        "CREATE TYPE mission_status AS ENUM ('planned', 'active', 'completed', 'cancelled')"
-    )
-    op.execute(
-        "CREATE TYPE user_role AS ENUM ('admin', 'operator', 'viewer')"
-    )
-
     # ── measurement_types ────────────────────────────────────────────────────
     op.create_table(
         "measurement_types",
@@ -56,12 +48,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.String(1000), nullable=True),
-        sa.Column(
-            "status",
-            sa.Enum("planned", "active", "completed", "cancelled", name="mission_status", create_type=False),
-            nullable=False,
-            server_default="planned",
-        ),
+        sa.Column("status", sa.String(50), nullable=False, server_default="planned"),
         sa.Column(
             "target_area",
             geoalchemy2.Geography(geometry_type="POLYGON", srid=4326),
@@ -232,12 +219,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("email", sa.String(254), nullable=False, unique=True),
-        sa.Column(
-            "role",
-            sa.Enum("admin", "operator", "viewer", name="user_role", create_type=False),
-            nullable=False,
-            server_default="viewer",
-        ),
+        sa.Column("role", sa.String(50), nullable=False, server_default="viewer"),
         sa.Column("hashed_password", sa.String(200), nullable=False),
     )
     op.create_index("ix_users_email", "users", ["email"])
@@ -255,5 +237,3 @@ def downgrade() -> None:
     op.drop_table("instruments")
     op.drop_table("measurement_types")
     op.drop_table("users")
-    op.execute("DROP TYPE IF EXISTS mission_status")
-    op.execute("DROP TYPE IF EXISTS user_role")

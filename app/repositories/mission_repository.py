@@ -4,10 +4,9 @@ import uuid
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.mission import Mission, MissionInstrumentAssignment
+from app.models.mission import Mission
 from app.repositories.base import BaseRepository
 from app.utils.filtering import geojson_to_wkb
 
@@ -67,13 +66,3 @@ class MissionRepository(BaseRepository[Mission]):
         await self.db.refresh(mission)
         return mission
 
-    async def add_assignment(
-        self, mission_id: uuid.UUID, instrument_id: uuid.UUID
-    ) -> MissionInstrumentAssignment:
-        obj = MissionInstrumentAssignment(
-            mission_id=mission_id, instrument_id=instrument_id
-        )
-        self.db.add(obj)
-        await self.db.flush()
-        await self.db.refresh(obj)
-        return obj

@@ -38,6 +38,12 @@ class Visitor(Base):
     tags: Mapped[list[str] | None] = mapped_column(
         ARRAY(String(100)), nullable=True
     )
+    internal_exposure: Mapped[float | None] = mapped_column(
+        Float, nullable=True, default=None
+    )
+    external_exposure: Mapped[float | None] = mapped_column(
+        Float, nullable=True, default=None
+    )
 
     body_measurements: Mapped[list["BodyMeasurement"]] = relationship(
         "BodyMeasurement", back_populates="visitor", cascade="all, delete-orphan"
@@ -75,6 +81,8 @@ class VisitorTrack(Base):
     __tablename__ = "visitor_tracks"
     __table_args__ = (
         Index("ix_visitor_tracks_visitor_id", "visitor_id"),
+        Index("ix_visitor_tracks_start_time", "start_time"),
+        Index("ix_visitor_tracks_end_time", "end_time"),
         Index("ix_visitor_tracks_geom", "geom", postgresql_using="gist"),
     )
 
@@ -89,7 +97,11 @@ class VisitorTrack(Base):
     geom: Mapped[Any] = mapped_column(
         Geography(geometry_type="LINESTRING", srid=4326), nullable=False
     )
-    recorded_at: Mapped[datetime] = mapped_column(
+    start_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    end_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )

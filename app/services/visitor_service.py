@@ -17,9 +17,11 @@ from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.schemas.filter import FilterQuery
 from app.repositories.base import BaseRepository
+from app.services.base_service import BaseService
+from app.utils.physics_calculations import calculate_exposure
 
 
-class VisitorService:
+class VisitorService(BaseService):
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.visitor_repo = VisitorRepository(db)
@@ -48,18 +50,28 @@ class VisitorService:
         )
         return list(items), total
 
-        async def search_visitors(
-            self,
+    async def search_visitors(
+        self,
+        scenario_id: uuid.UUID,
+        filter_query: FilterQuery,
+    ) -> list[Visitor]:
+        """Search visitors using structured filters."""
+        repo = BaseRepository(Visitor, self.db)
+        try:
+            results = await repo.filter_by(filter_query, scenario_id=scenario_id)
+        except ValueError as e:
+            raise NotFoundException(f"Invalid filter: {str(e)}")
+        return list(results)
+
+    async def calculate_visitor_exposure(
+            self, 
             scenario_id: uuid.UUID,
-            filter_query: FilterQuery,
-        ) -> list[Visitor]:
-            """Search visitors using structured filters."""
-            repo = BaseRepository(Visitor, self.db)
-            try:
-                results = await repo.filter_by(filter_query, scenario_id=scenario_id)
-            except ValueError as e:
-                raise NotFoundException(f"Invalid filter: {str(e)}")
-            return list(results)
+            visitor_id: uuid.UUID
+    ):
+        data = calculate_exposure(self.db, scenario_id, visitor_id)
+        self.visitor_repo.update_exposure(visitor_id, scenario_id, data)
+        return await self.get_visitor(scenario_id, visitor_id)
+
 
     # ── Body Measurements ─────────────────────────────────────────────────────
 
@@ -92,17 +104,17 @@ class VisitorService:
         event_publisher: Any = None,
     ) -> VisitorTrack:
         await self.get_visitor(scenario_id, visitor_id)
-        track = await self.track_repo.create_track(visitor_id, data.geom)
+        track = await self.track_repo.create_track(
+            visitor_id,
+            data.geom,
+            start_time=data.start_time,
+            end_time=data.end_time,
+        )
         if event_publisher:
             await event_publisher(
                 {
                     "event": "visitor.track_updated",
-                    "data": {
-                        "scenario_id": str(scenario_id),
-                        "visitor_id": str(visitor_id),
-                        "track_id": str(track.id),
-                        "geom": wkb_to_geojson(track.geom),
-                    },
+                    "data": self.serialize_for_event(track),
                 }
             )
         return track
@@ -121,3 +133,14 @@ class VisitorService:
             skip=pagination.offset, limit=pagination.limit
         )
         return list(items), total
+
+    def serialize_for_event(self, track: VisitorTrack | None) -> dict[str, Any]:
+        if track is None:
+            return {}
+        return {
+            "track_id": str(track.id),
+            "visitor_id": str(track.visitor_id),
+            "geom": wkb_to_geojson(track.geom),
+            "start_time": track.start_time.isoformat(),
+            "end_time": track.end_time.isoformat(),
+        }

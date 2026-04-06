@@ -9,15 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import (
-    aggregation_router,
     auth_router,
-    instrument_router,
-    labels_router,
+    configured_values_router,
     measurements_router,
     missions_router,
     scenarios_router,
+    teams_router,
     tracks_router,
-    type_router,
     users_router,
     visitors_router,
 )
@@ -111,14 +109,12 @@ API_PREFIX = "/api/v1"
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(scenarios_router, prefix=API_PREFIX)
 app.include_router(measurements_router, prefix=API_PREFIX)
-app.include_router(type_router, prefix=API_PREFIX)
-app.include_router(instrument_router, prefix=API_PREFIX)
 app.include_router(visitors_router, prefix=API_PREFIX)
 app.include_router(tracks_router, prefix=API_PREFIX)
 app.include_router(missions_router, prefix=API_PREFIX)
-app.include_router(labels_router, prefix=API_PREFIX)
+app.include_router(teams_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)
-app.include_router(aggregation_router, prefix=API_PREFIX)
+app.include_router(configured_values_router, prefix=API_PREFIX)
 
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────
