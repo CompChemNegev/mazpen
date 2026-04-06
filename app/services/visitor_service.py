@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.visitor import BodyMeasurement, Visitor, VisitorTrack
+from app.repositories.visitor_repository import (
+    BodyMeasurementRepository,
+    VisitorRepository,
+    VisitorTrackRepository,
+)
+from app.schemas.visitor import BodyMeasurementCreate, VisitorCreate, VisitorTrackCreate
+from app.utils.exceptions import NotFoundException
+from app.utils.filtering import wkb_to_geojson
+from app.utils.pagination import PaginationParams
+
+
+class VisitorService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+        self.visitor_repo = VisitorRepository(db)
+        self.body_repo = BodyMeasurementRepository(db)
+        self.track_repo = VisitorTrackRepository(db)
+
+    async def create_visitor(self, data: VisitorCreate) -> Visitor:
+        return await self.visitor_repo.create_visitor(data.model_dump())
+
+    async def get_visitor(self, visitor_id: uuid.UUID) -> Visitor:
+        visitor = await self.visitor_repo.get_by_id(visitor_id)
+        if not visitor:
+            raise NotFoundException("Visitor not found")
+        return visitor
+
+    async def list_visitors(
+        self, pagination: PaginationParams
+    ) -> tuple[list[Visitor], int]:
+        items, total = await self.visitor_repo.get_with_counts(
+            skip=pagination.offset, limit=pagination.limit
+        )
+        return list(items), total
+
+    # ── Body Measurements ─────────────────────────────────────────────────────
+
+    async def create_body_measurement(
+        self, visitor_id: uuid.UUID, data: BodyMeasurementCreate
+    ) -> BodyMeasurement:
+        await self.get_visitor(visitor_id)
+        return await self.body_repo.create_body_measurement(
+            visitor_id, data.model_dump()
+        )
+
+    async def list_body_measurements(
+        self, visitor_id: uuid.UUID
+    ) -> list[BodyMeasurement]:
+        await self.get_visitor(visitor_id)
+        return list(await self.body_repo.get_for_visitor(visitor_id))
+
+    # ── Visitor Tracks ────────────────────────────────────────────────────────
+
+    async def create_track(
+        self,
+        visitor_id: uuid.UUID,
+        data: VisitorTrackCreate,
+        event_publisher: Any = None,
+    ) -> VisitorTrack:
+        await self.get_visitor(visitor_id)
+        track = await self.track_repo.create_track(visitor_id, data.geom)
+        if event_publisher:
+            await event_publisher(
+                {
+                    "event": "visitor.track_updated",
+                    "data": {
+                        "visitor_id": str(visitor_id),
+                        "track_id": str(track.id),
+                        "geom": wkb_to_geojson(track.geom),
+                    },
+                }
+            )
+        return track
+
+    async def list_tracks(self, visitor_id: uuid.UUID) -> list[VisitorTrack]:
+        await self.get_visitor(visitor_id)
+        return list(await self.track_repo.get_for_visitor(visitor_id))
+
+    async def list_all_tracks(
+        self, pagination: PaginationParams
+    ) -> tuple[list[VisitorTrack], int]:
+        items, total = await self.track_repo.get_all_tracks(
+            skip=pagination.offset, limit=pagination.limit
+        )
+        return list(items), total
