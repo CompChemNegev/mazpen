@@ -4,10 +4,23 @@ import MapView from '../components/MapView';
 import { MAP_CENTER } from '../data/mockData';
 import { ArrowLeft, User, Phone, CreditCard, Activity, Thermometer, Heart, StickyNote, Save, Plus, MapPin, Trash2, Ruler } from 'lucide-react';
 import { useLang } from '../context/LangContext';
+import { useScenario } from '../context/ScenarioContext';
+import { api } from '../api/client';
 
 export default function VisitorIntake() {
   const { t } = useLang();
+  const { scenarioName } = useScenario();
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [age, setAge] = useState('');
+  const [contact, setContact] = useState('');
+  const [exposureReading, setExposureReading] = useState('');
+  const [bloodPressure, setBloodPressure] = useState('');
+  const [heartRate, setHeartRate] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [notes, setNotes] = useState('');
   const [locations, setLocations] = useState<{ location: string; timestamp: string }[]>([
     { location: '', timestamp: '' },
   ]);
@@ -16,6 +29,50 @@ export default function VisitorIntake() {
     { zone: 'Legs', value: '' },
     { zone: 'Face', value: '' },
   ]);
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      const visitor = await api.createVisitor(scenarioName, {
+        demographics: {
+          name: name || undefined,
+          id_number: idNumber || undefined,
+          age: age ? Number(age) : undefined,
+          contact: contact || undefined,
+          exposure_reading: exposureReading ? Number(exposureReading) : undefined,
+          blood_pressure: bloodPressure || undefined,
+          heart_rate: heartRate ? Number(heartRate) : undefined,
+          temperature: temperature ? Number(temperature) : undefined,
+          notes: notes || undefined,
+        },
+        tags: [],
+      });
+
+      const visitorId = visitor?.id;
+      if (visitorId) {
+        // Create body measurements
+        for (const bm of bodyMeasurements) {
+          if (bm.zone && bm.value) {
+            await api.createBodyMeasurement(scenarioName, visitorId, {
+              timestamp: new Date().toISOString(),
+              type: bm.zone,
+              value: Number(bm.value),
+              unit: 'n/a',
+            });
+          }
+        }
+
+        // Track API currently expects a GeoJSON LineString (geom), while this
+        // form collects text locations without coordinates; skip invalid payloads.
+      }
+
+      setSubmitted(true);
+    } catch (e) {
+      console.error('Failed to register visitor', e);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (submitted) {
     return (
@@ -59,19 +116,19 @@ export default function VisitorIntake() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">{t('intake.fullName')}</label>
-              <input type="text" placeholder="John Smith" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block flex items-center gap-1"><CreditCard className="w-3 h-3" /> {t('intake.idNumber')}</label>
-              <input type="text" placeholder="DC-1234567" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" placeholder="DC-1234567" value={idNumber} onChange={e => setIdNumber(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">{t('intake.age')}</label>
-              <input type="number" placeholder="35" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" placeholder="35" value={age} onChange={e => setAge(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block flex items-center gap-1"><Phone className="w-3 h-3" /> {t('intake.contact')}</label>
-              <input type="tel" placeholder="+1-202-555-0123" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="tel" placeholder="+1-202-555-0123" value={contact} onChange={e => setContact(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
@@ -86,21 +143,21 @@ export default function VisitorIntake() {
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block flex items-center gap-1">
                 <Thermometer className="w-3 h-3" /> {t('intake.exposureReading')}
               </label>
-              <input type="number" step="0.01" placeholder="0.00" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" step="0.01" placeholder="0.00" value={exposureReading} onChange={e => setExposureReading(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block flex items-center gap-1">
                 <Heart className="w-3 h-3" /> {t('intake.bloodPressure')}
               </label>
-              <input type="text" placeholder="120/80" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" placeholder="120/80" value={bloodPressure} onChange={e => setBloodPressure(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">{t('intake.heartRate')}</label>
-              <input type="number" placeholder="72" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" placeholder="72" value={heartRate} onChange={e => setHeartRate(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">{t('intake.temperature')}</label>
-              <input type="number" step="0.1" placeholder="36.6" className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" step="0.1" placeholder="36.6" value={temperature} onChange={e => setTemperature(e.target.value)} className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
@@ -205,17 +262,20 @@ export default function VisitorIntake() {
           <textarea
             rows={3}
             placeholder={t('intake.notesPlaceholder')}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
             className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
         </div>
 
         {/* Submit */}
         <button
-          onClick={() => setSubmitted(true)}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 active:scale-[0.99]"
+          onClick={handleSubmit}
+          disabled={saving}
+          className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 active:scale-[0.99] disabled:opacity-50"
         >
           <Save className="w-4 h-4 inline-block mr-2 -mt-0.5" />
-          {t('intake.register')}
+          {saving ? t('intake.saving') ?? 'Saving…' : t('intake.register')}
         </button>
       </div>
     </div>

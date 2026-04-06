@@ -1,30 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MapView from '../components/MapView';
-import { MeasurementType, UNIT_MAP, TYPE_LABELS, teams as mockTeams, Team } from '../data/mockData';
+import { instruments as mockInstruments, Instrument, UNIT_MAP, TYPE_LABELS } from '../data/mockData';
 import { api } from '../api/client';
 import { useApi } from '../api/useApi';
+import { useScenario } from '../context/ScenarioContext';
 import {
   ArrowLeft, MapPin, Clock, Users, Beaker, Hash, StickyNote,
-  Camera, Send, WifiOff, Wifi, ChevronDown
+  Camera, Send, Wifi, ChevronDown
 } from 'lucide-react';
 import { useLang } from '../context/LangContext';
 
-const measurementTypes: MeasurementType[] = ['radiation', 'air_quality', 'water', 'soil', 'noise'];
+const typeKeys = ['radiation', 'air_quality', 'water', 'soil', 'noise'];
 
 export default function NewMeasurement() {
   const { t } = useLang();
-  const { data: apiTeams } = useApi<Team[]>(() => api.getTeams(), []);
-  const teams = apiTeams ?? mockTeams;
+  const { scenarioName } = useScenario();
+  const { data: apiInstruments } = useApi<Instrument[]>(() => api.getInstruments(scenarioName), [scenarioName]);
+  const { data: apiMeasurementTypes } = useApi<any[]>(() => api.getMeasurementTypes(scenarioName), [scenarioName]);
+  const instruments = apiInstruments ?? mockInstruments;
 
-  const [type, setType] = useState<MeasurementType>('radiation');
+  const [typeKey, setTypeKey] = useState('radiation');
   const [value, setValue] = useState('');
-  const [teamId, setTeamId] = useState('ALPHA');
+  const [instrumentId, setInstrumentId] = useState(instruments[0]?.id ?? '');
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Simulated GPS
   const gpsLat = 38.9072 + (Math.random() - 0.5) * 0.01;
   const gpsLng = -77.0369 + (Math.random() - 0.5) * 0.01;
   const now = new Date().toISOString();
@@ -49,9 +52,20 @@ export default function NewMeasurement() {
     );
   }
 
+  useEffect(() => {
+    if (!instrumentId && instruments.length > 0) {
+      setInstrumentId(instruments[0].id);
+    }
+  }, [instrumentId, instruments]);
+
+  // Resolve type by key against API types first, then fallback by name key
+  const mt = useMemo(() => {
+    if (!apiMeasurementTypes || apiMeasurementTypes.length === 0) return null;
+    return apiMeasurementTypes.find((m: any) => m.name === typeKey) ?? null;
+  }, [apiMeasurementTypes, typeKey]);
+
   return (
     <div className="max-w-lg mx-auto pb-24">
-      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link to="/field-reports" className="p-2 -ml-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -62,7 +76,6 @@ export default function NewMeasurement() {
         </div>
       </div>
 
-      {/* Online status */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-sm mb-5">
         <Wifi className="w-4 h-4" />
         <span>{t('newMeasurement.online')}</span>
@@ -75,11 +88,7 @@ export default function NewMeasurement() {
             <MapPin className="w-4 h-4" /> {t('newMeasurement.gpsLocation')}
           </div>
           <div className="h-48">
-            <MapView
-              center={[gpsLat, gpsLng]}
-              zoom={15}
-              markers={[{ lat: gpsLat, lng: gpsLng, color: '#3b82f6', size: 16 }]}
-            />
+            <MapView center={[gpsLat, gpsLng]} zoom={15} markers={[{ lat: gpsLat, lng: gpsLng, color: '#3b82f6', size: 16 }]} />
           </div>
           <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-50 dark:bg-gray-900">
             {gpsLat.toFixed(6)}, {gpsLng.toFixed(6)} · Accuracy: ±3m
@@ -91,26 +100,18 @@ export default function NewMeasurement() {
           <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">
             <Clock className="w-4 h-4" /> {t('newMeasurement.timestamp')}
           </label>
-          <input
-            type="datetime-local"
-            defaultValue={now.slice(0, 16)}
-            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-          />
+          <input type="datetime-local" defaultValue={now.slice(0, 16)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
         </div>
 
-        {/* Team */}
+        {/* Instrument */}
         <div>
           <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">
             <Users className="w-4 h-4" /> {t('newMeasurement.team')}
           </label>
           <div className="relative">
-            <select
-              value={teamId}
-              onChange={e => setTeamId(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              {teams.map(tm => (
-                <option key={tm.id} value={tm.id}>{tm.name} ({tm.members} members)</option>
+            <select value={instrumentId} onChange={e => setInstrumentId(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              {instruments.map(inst => (
+                <option key={inst.id} value={inst.id}>{inst.name} ({inst.type})</option>
               ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -123,17 +124,17 @@ export default function NewMeasurement() {
             <Beaker className="w-4 h-4" /> {t('newMeasurement.type')}
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {measurementTypes.map(mt => (
+            {typeKeys.map(tk => (
               <button
-                key={mt}
-                onClick={() => setType(mt)}
+                key={tk}
+                onClick={() => setTypeKey(tk)}
                 className={`px-3 py-3 rounded-xl text-sm font-medium border transition-colors ${
-                  type === mt
+                  typeKey === tk
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
                 }`}
               >
-                {TYPE_LABELS[mt]}
+                {TYPE_LABELS[tk] ?? tk}
               </button>
             ))}
           </div>
@@ -145,16 +146,9 @@ export default function NewMeasurement() {
             <Hash className="w-4 h-4" /> {t('newMeasurement.value')}
           </label>
           <div className="flex gap-2">
-            <input
-              type="number"
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              placeholder="0.00"
-              step="0.01"
-              className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-lg font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            />
+            <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" step="0.01" className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-lg font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
             <div className="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm font-medium flex items-center min-w-[70px] justify-center">
-              {UNIT_MAP[type]}
+              {UNIT_MAP[typeKey] ?? ''}
             </div>
           </div>
         </div>
@@ -164,13 +158,7 @@ export default function NewMeasurement() {
           <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">
             <StickyNote className="w-4 h-4" /> {t('newMeasurement.notes')}
           </label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            rows={3}
-            placeholder={t('newMeasurement.notesPlaceholder')}
-            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
-          />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder={t('newMeasurement.notesPlaceholder')} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none" />
         </div>
 
         {/* Photo upload */}
@@ -190,15 +178,29 @@ export default function NewMeasurement() {
         <div className="max-w-lg mx-auto">
           <button
             onClick={async () => {
+              setSubmitError(null);
               setSubmitting(true);
               try {
-                await api.createMeasurement({
-                  type, value: parseFloat(value), unit: UNIT_MAP[type],
-                  lat: gpsLat, lng: gpsLng, timestamp: now, notes, teamId,
+                if (!mt?.id) {
+                  throw new Error('Measurement type is not configured on the server yet');
+                }
+                if (!instrumentId) {
+                  throw new Error('No instrument available for this scenario');
+                }
+                await api.createMeasurement(scenarioName, {
+                  measurement_type_id: mt?.id,
+                  value: parseFloat(value),
+                  unit: UNIT_MAP[typeKey],
+                  instrument_id: instrumentId,
+                  location: { type: 'Point', coordinates: [gpsLng, gpsLat] },
+                  timestamp: now,
+                  metadata: { notes },
                 });
-              } catch { /* falls back to offline stub */ }
+                setSubmitted(true);
+              } catch (e: any) {
+                setSubmitError(e?.message || 'Failed to submit measurement');
+              }
               setSubmitting(false);
-              setSubmitted(true);
             }}
             disabled={!value || submitting}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
@@ -208,8 +210,9 @@ export default function NewMeasurement() {
             }`}
           >
             <Send className="w-5 h-5 inline-block mr-2 -mt-0.5" />
-            {t('newMeasurement.submit')}
+            {submitting ? t('newMeasurement.submitting') : t('newMeasurement.submit')}
           </button>
+          {submitError && <p className="mt-2 text-sm text-red-500">{submitError}</p>}
         </div>
       </div>
     </div>

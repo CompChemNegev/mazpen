@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { LangProvider } from './context/LangContext';
+import { ScenarioProvider } from './context/ScenarioContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import GlobalLayout from './components/GlobalLayout';
+import Login from './pages/Login';
 import FieldReports from './pages/FieldReports';
 import NewMeasurement from './pages/NewMeasurement';
 import MyReports from './pages/MyReports';
@@ -13,12 +16,17 @@ import VisitorProfile from './pages/VisitorProfile';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 
-export default function App() {
+function AuthenticatedApp() {
+  const { token } = useAuth();
+
+  if (!token) {
+    return <Login />;
+  }
+
   return (
-    <LangProvider>
-      <ThemeProvider>
-        <BrowserRouter>
-          <GlobalLayout>
+    <ScenarioProvider>
+      <BrowserRouter>
+        <GlobalLayout>
           <Routes>
             <Route path="/" element={<Navigate to="/field-reports" replace />} />
             <Route path="/field-reports" element={<FieldReports />} />
@@ -34,7 +42,18 @@ export default function App() {
           </Routes>
         </GlobalLayout>
       </BrowserRouter>
-    </ThemeProvider>
-  </LangProvider>
+    </ScenarioProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <LangProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AuthenticatedApp />
+        </AuthProvider>
+      </ThemeProvider>
+    </LangProvider>
   );
 }

@@ -33,7 +33,11 @@ class Scenario(Base):
     )
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     type: Mapped[ScenarioType] = mapped_column(
-        Enum(ScenarioType, name="scenario_type"),
+        Enum(
+            ScenarioType,
+            name="scenario_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
         nullable=False,
         default=ScenarioType.DRILL,
     )

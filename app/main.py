@@ -39,9 +39,49 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _seed_defaults() -> None:
+    """Create a default admin user and scenario if the DB is empty."""
+    from app.core.database import AsyncSessionLocal
+    from app.core.security import get_password_hash
+    from app.models.user import User, UserRole
+    from app.models.scenario import Scenario, ScenarioType
+    from app.repositories.user_repository import UserRepository
+    from app.repositories.measurement_repository import ScenarioRepository
+
+    async with AsyncSessionLocal() as session:
+        user_repo = UserRepository(session)
+        existing = await user_repo.get_by_email("admin@mazpen.local")
+        if not existing:
+            admin = User(
+                name="Admin",
+                email="admin@mazpen.local",
+                role=UserRole.ADMIN,
+                hashed_password=get_password_hash("admin1234"),
+            )
+            await user_repo.save(admin)
+            logger.info("Seeded default admin user (admin@mazpen.local / admin1234)")
+
+        scenario_repo = ScenarioRepository(session)
+        existing_scenario = await scenario_repo.get_by_name("drill-2026")
+        if not existing_scenario:
+            scenario = Scenario(
+                name="drill-2026",
+                type=ScenarioType.DRILL,
+                description="Default drill scenario",
+            )
+            session.add(scenario)
+            logger.info("Seeded default scenario 'drill-2026'")
+
+        await session.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting up %s v%s", settings.APP_NAME, settings.APP_VERSION)
+    try:
+        await _seed_defaults()
+    except Exception:
+        logger.exception("Seed failed — DB may not be migrated yet")
     yield
     logger.info("Shutting down — disposing DB engine")
     await engine.dispose()

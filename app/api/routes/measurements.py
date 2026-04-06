@@ -225,7 +225,7 @@ async def update_measurement(
     return _to_response(result)
 
 
-@router.delete("/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_measurement(
     measurement_id: uuid.UUID,
     _: AdminOrOperator,

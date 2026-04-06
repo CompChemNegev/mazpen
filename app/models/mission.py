@@ -43,7 +43,11 @@ class Mission(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     status: Mapped[MissionStatus] = mapped_column(
-        Enum(MissionStatus, name="mission_status"),
+        Enum(
+            MissionStatus,
+            name="mission_status",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
         nullable=False,
         default=MissionStatus.PLANNED,
     )

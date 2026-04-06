@@ -25,12 +25,17 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis_topology")
 
     # ── Enums ────────────────────────────────────────────────────────────────
-    op.execute(
-        "CREATE TYPE mission_status AS ENUM ('planned', 'active', 'completed', 'cancelled')"
+    mission_status = postgresql.ENUM(
+        'planned', 'active', 'completed', 'cancelled',
+        name='mission_status', create_type=False,
     )
-    op.execute(
-        "CREATE TYPE user_role AS ENUM ('admin', 'operator', 'viewer')"
+    mission_status.create(op.get_bind(), checkfirst=True)
+
+    user_role = postgresql.ENUM(
+        'admin', 'operator', 'viewer',
+        name='user_role', create_type=False,
     )
+    user_role.create(op.get_bind(), checkfirst=True)
 
     # ── measurement_types ────────────────────────────────────────────────────
     op.create_table(
@@ -58,7 +63,7 @@ def upgrade() -> None:
         sa.Column("description", sa.String(1000), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("planned", "active", "completed", "cancelled", name="mission_status", create_type=False),
+            mission_status,
             nullable=False,
             server_default="planned",
         ),
@@ -234,7 +239,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(254), nullable=False, unique=True),
         sa.Column(
             "role",
-            sa.Enum("admin", "operator", "viewer", name="user_role", create_type=False),
+            user_role,
             nullable=False,
             server_default="viewer",
         ),

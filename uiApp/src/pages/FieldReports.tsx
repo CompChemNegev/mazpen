@@ -1,22 +1,22 @@
 import { Link } from 'react-router-dom';
-import { measurements as mockMeasurements, teams as mockTeams, Measurement, Team } from '../data/mockData';
-import { api } from '../api/client';
+import { measurements as mockMeasurements, Measurement, getSeverity, getMeasurementStatus, TYPE_LABELS } from '../data/mockData';
+import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
+import { useScenario } from '../context/ScenarioContext';
 import StatusBadge from '../components/StatusBadge';
-import { Plus, ClipboardList, Activity, Clock, CheckCircle, AlertTriangle, WifiOff, Wifi } from 'lucide-react';
+import { Plus, ClipboardList, Activity, Clock, CheckCircle, AlertTriangle, Wifi } from 'lucide-react';
 import { useLang } from '../context/LangContext';
 
 export default function FieldReports() {
   const { t } = useLang();
-  const { data: apiMeasurements } = useApi<Measurement[]>(() => api.getMeasurements(), []);
-  const { data: apiTeams } = useApi<Team[]>(() => api.getTeams(), []);
-  const measurements = apiMeasurements ?? mockMeasurements;
-  const teams = apiTeams ?? mockTeams;
+  const { scenarioName } = useScenario();
+  const { data: apiData } = useApi<Paginated<Measurement>>(() => api.getMeasurements(scenarioName), [scenarioName]);
+  const measurements = apiData?.items ?? mockMeasurements;
 
   const today = measurements.filter(m => m.timestamp.startsWith('2026-04-05'));
-  const pending = today.filter(m => m.status === 'pending').length;
-  const verified = today.filter(m => m.status === 'verified').length;
-  const flagged = today.filter(m => m.status === 'flagged').length;
+  const pending = today.filter(m => getMeasurementStatus(m) === 'pending').length;
+  const verified = today.filter(m => getMeasurementStatus(m) === 'verified').length;
+  const flagged = today.filter(m => getMeasurementStatus(m) === 'flagged').length;
   const recent = [...measurements].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 5);
 
   return (
@@ -92,21 +92,22 @@ export default function FieldReports() {
         </div>
         <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
           {recent.map(m => {
-            const team = teams.find(t => t.id === m.teamId);
+            const severity = getSeverity(m);
+            const typeName = m.measurement_type?.name ?? '';
             return (
               <div key={m.id} className="px-4 py-3 flex items-center gap-3">
                 <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                  m.severity === 'danger' ? 'bg-red-500' : m.severity === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                  severity === 'danger' ? 'bg-red-500' : severity === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
                 }`} />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium truncate">
-                    {m.type.replace(/_/g, ' ')} – {m.value} {m.unit}
+                    {TYPE_LABELS[typeName] ?? typeName} – {m.value} {m.unit}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {team?.name} · {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {m.instrument?.name} · {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
-                <StatusBadge value={m.status} type="status" />
+                <StatusBadge value={getMeasurementStatus(m)} type="status" />
               </div>
             );
           })}

@@ -21,7 +21,11 @@ depends_on: str | None = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE scenario_type AS ENUM ('drill', 'real_event', 'training', 'other')")
+    scenario_type = postgresql.ENUM(
+        "drill", "real_event", "training", "other",
+        name="scenario_type", create_type=False,
+    )
+    scenario_type.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         "scenarios",
@@ -29,7 +33,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=100), nullable=False, unique=True),
         sa.Column(
             "type",
-            sa.Enum("drill", "real_event", "training", "other", name="scenario_type", create_type=False),
+            scenario_type,
             nullable=False,
             server_default="drill",
         ),
