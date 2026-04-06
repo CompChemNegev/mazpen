@@ -15,6 +15,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.mission import Mission
     from app.models.label import MeasurementLabel
+    from app.models.scenario import Scenario
 
 
 class MeasurementType(Base):
@@ -52,6 +53,7 @@ class Measurement(Base):
     __tablename__ = "measurements"
     __table_args__ = (
         Index("ix_measurements_timestamp", "timestamp"),
+        Index("ix_measurements_scenario_id", "scenario_id"),
         Index("ix_measurements_measurement_type_id", "measurement_type_id"),
         Index("ix_measurements_instrument_id", "instrument_id"),
         Index("ix_measurements_mission_id", "mission_id"),
@@ -64,6 +66,11 @@ class Measurement(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location: Mapped[Any] = mapped_column(
         Geography(geometry_type="POINT", srid=4326), nullable=False
+    )
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        nullable=False,
     )
     measurement_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -97,6 +104,7 @@ class Measurement(Base):
     measurement_type: Mapped["MeasurementType"] = relationship(
         "MeasurementType", back_populates="measurements"
     )
+    scenario: Mapped["Scenario"] = relationship("Scenario", back_populates="measurements")
     instrument: Mapped["Instrument"] = relationship(
         "Instrument", back_populates="measurements"
     )

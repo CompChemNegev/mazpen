@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.measurement import Instrument, Measurement, MeasurementType
 from app.models.label import MeasurementLabel
+from app.models.scenario import Scenario
 from app.repositories.base import BaseRepository
 from app.schemas.measurement import MeasurementFilterParams
 from app.utils.filtering import geojson_to_wkb
@@ -31,6 +32,15 @@ class InstrumentRepository(BaseRepository[Instrument]):
         super().__init__(Instrument, db)
 
 
+class ScenarioRepository(BaseRepository[Scenario]):
+    def __init__(self, db: AsyncSession) -> None:
+        super().__init__(Scenario, db)
+
+    async def get_by_name(self, name: str) -> Scenario | None:
+        result = await self.db.execute(select(Scenario).where(Scenario.name == name))
+        return result.scalar_one_or_none()
+
+
 class MeasurementRepository(BaseRepository[Measurement]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(Measurement, db)
@@ -42,21 +52,29 @@ class MeasurementRepository(BaseRepository[Measurement]):
             selectinload(Measurement.labels).selectinload(MeasurementLabel.label),
         )
 
-    async def get_by_id(self, record_id: uuid.UUID) -> Measurement | None:
+    async def get_by_id(
+        self,
+        record_id: uuid.UUID,
+        scenario_id: uuid.UUID | None = None,
+    ) -> Measurement | None:
+        conditions = [Measurement.id == record_id]
+        if scenario_id is not None:
+            conditions.append(Measurement.scenario_id == scenario_id)
         result = await self.db.execute(
-            self._base_query().where(Measurement.id == record_id)
+            self._base_query().where(*conditions)
         )
         return result.scalar_one_or_none()
 
     async def get_filtered(
         self,
+        scenario_id: uuid.UUID,
         filters: MeasurementFilterParams,
         skip: int = 0,
         limit: int = 20,
         sort_col: str = "timestamp",
         sort_dir: str = "desc",
     ) -> tuple[Sequence[Measurement], int]:
-        conditions = self._build_conditions(filters)
+        conditions = [Measurement.scenario_id == scenario_id, *self._build_conditions(filters)]
 
         count_stmt = select(func.count()).select_from(Measurement)
         if conditions:
@@ -125,6 +143,7 @@ class MeasurementRepository(BaseRepository[Measurement]):
 
     async def get_aggregate_stats(
         self,
+        scenario_id: uuid.UUID,
         measurement_type_id: Optional[uuid.UUID] = None,
         from_date: Any = None,
         to_date: Any = None,
@@ -143,6 +162,7 @@ class MeasurementRepository(BaseRepository[Measurement]):
             .group_by(MT.name, MT.unit)
         )
         conds: list[Any] = []
+        conds.append(Measurement.scenario_id == scenario_id)
         if measurement_type_id:
             conds.append(Measurement.measurement_type_id == measurement_type_id)
         if from_date:
@@ -156,6 +176,7 @@ class MeasurementRepository(BaseRepository[Measurement]):
 
     async def get_map_data(
         self,
+        scenario_id: uuid.UUID,
         lat_min: Optional[float] = None,
         lat_max: Optional[float] = None,
         lon_min: Optional[float] = None,
@@ -169,7 +190,7 @@ class MeasurementRepository(BaseRepository[Measurement]):
             Measurement.unit,
             Measurement.timestamp,
             Measurement.measurement_type_id,
-        ).limit(limit)
+        ).where(Measurement.scenario_id == scenario_id).limit(limit)
         if all(v is not None for v in [lat_min, lat_max, lon_min, lon_max]):
             envelope = func.ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326)
             stmt = stmt.where(func.ST_Within(Measurement.location, envelope))

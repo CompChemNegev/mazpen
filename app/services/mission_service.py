@@ -21,39 +21,53 @@ class MissionService:
         self.instrument_repo = InstrumentRepository(db)
 
     async def create_mission(
-        self, data: MissionCreate, event_publisher: Any = None
+        self,
+        scenario_id: uuid.UUID,
+        data: MissionCreate,
+        event_publisher: Any = None,
     ) -> Mission:
-        mission = await self.repo.create_mission(data.model_dump())
+        payload = data.model_dump()
+        payload["scenario_id"] = scenario_id
+        mission = await self.repo.create_mission(payload)
         if event_publisher:
             await event_publisher(
                 {
                     "event": "mission.created",
-                    "data": {"id": str(mission.id), "name": mission.name},
+                    "data": {
+                        "id": str(mission.id),
+                        "scenario_id": str(scenario_id),
+                        "name": mission.name,
+                    },
                 }
             )
         return mission
 
-    async def get_mission(self, mission_id: uuid.UUID) -> Mission:
-        mission = await self.repo.get_by_id(mission_id)
+    async def get_mission(self, scenario_id: uuid.UUID, mission_id: uuid.UUID) -> Mission:
+        mission = await self.repo.get_by_id(mission_id, scenario_id=scenario_id)
         if not mission:
             raise NotFoundException("Mission not found")
         return mission
 
     async def list_missions(
-        self, pagination: PaginationParams, status: str | None = None
+        self,
+        scenario_id: uuid.UUID,
+        pagination: PaginationParams,
+        status: str | None = None,
     ) -> tuple[list[Mission], int]:
         items, total = await self.repo.get_all_paginated(
+            scenario_id=scenario_id,
             skip=pagination.offset, limit=pagination.limit, status=status
         )
         return list(items), total
 
     async def update_mission(
         self,
+        scenario_id: uuid.UUID,
         mission_id: uuid.UUID,
         data: MissionUpdate,
         event_publisher: Any = None,
     ) -> Mission:
-        mission = await self.get_mission(mission_id)
+        mission = await self.get_mission(scenario_id, mission_id)
         updated = await self.repo.update_mission(
             mission, data.model_dump(exclude_unset=True, exclude_none=True)
         )
@@ -61,19 +75,26 @@ class MissionService:
             await event_publisher(
                 {
                     "event": "mission.updated",
-                    "data": {"id": str(updated.id), "status": updated.status},
+                    "data": {
+                        "id": str(updated.id),
+                        "scenario_id": str(scenario_id),
+                        "status": updated.status,
+                    },
                 }
             )
         return updated
 
-    async def delete_mission(self, mission_id: uuid.UUID) -> None:
-        mission = await self.get_mission(mission_id)
+    async def delete_mission(self, scenario_id: uuid.UUID, mission_id: uuid.UUID) -> None:
+        mission = await self.get_mission(scenario_id, mission_id)
         await self.repo.delete(mission)
 
     async def add_assignment(
-        self, mission_id: uuid.UUID, body: MissionAssignmentCreate
+        self,
+        scenario_id: uuid.UUID,
+        mission_id: uuid.UUID,
+        body: MissionAssignmentCreate,
     ) -> MissionInstrumentAssignment:
-        await self.get_mission(mission_id)
+        await self.get_mission(scenario_id, mission_id)
         instrument = await self.instrument_repo.get_by_id(body.instrument_id)
         if not instrument:
             raise NotFoundException("Instrument not found")

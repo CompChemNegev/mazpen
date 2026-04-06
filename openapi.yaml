@@ -1,0 +1,1423 @@
+openapi: 3.0.3
+info:
+  title: Environmental Monitoring API
+  version: 1.0.0
+  description: |
+    Production-grade REST API for environmental monitoring, mission management,
+    visitor tracking, and geospatial analytics.
+
+    Scenario-scoped routes are prefixed with:
+    /api/v1/{scenario_name}/...
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Scenarios
+  - name: Users
+  - name: Measurements
+  - name: Measurement Types
+  - name: Instruments
+  - name: Visitors
+  - name: Visitor Tracks
+  - name: Missions
+  - name: Labels
+  - name: Aggregation
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: API health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+
+  /api/v1/auth/token:
+    post:
+      tags: [Auth]
+      summary: OAuth2 password login (username is email)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/scenarios:
+    get:
+      tags: [Scenarios]
+      summary: List scenarios
+      responses:
+        '200':
+          description: Scenarios list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScenarioResponse'
+    post:
+      tags: [Scenarios]
+      summary: Create a scenario (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioCreate'
+      responses:
+        '201':
+          description: Scenario created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/scenarios/{scenario_name}:
+    get:
+      tags: [Scenarios]
+      summary: Get scenario by name
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      responses:
+        '200':
+          description: Scenario details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/users:
+    post:
+      tags: [Users]
+      summary: Create user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Users]
+      summary: List users (admin only)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsers'
+
+  /api/v1/users/{user_id}:
+    patch:
+      tags: [Users]
+      summary: Update user (admin only)
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/{scenario_name}/measurement-types:
+    get:
+      tags: [Measurement Types]
+      summary: List measurement types
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      responses:
+        '200':
+          description: Measurement types list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MeasurementTypeResponse'
+    post:
+      tags: [Measurement Types]
+      summary: Create measurement type
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementTypeCreate'
+      responses:
+        '201':
+          description: Measurement type created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementTypeResponse'
+
+  /api/v1/{scenario_name}/instruments:
+    get:
+      tags: [Instruments]
+      summary: List instruments
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      responses:
+        '200':
+          description: Instruments list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InstrumentResponse'
+    post:
+      tags: [Instruments]
+      summary: Create instrument
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentCreate'
+      responses:
+        '201':
+          description: Instrument created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentResponse'
+
+  /api/v1/{scenario_name}/instruments/{instrument_id}:
+    patch:
+      tags: [Instruments]
+      summary: Update instrument
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentUpdate'
+      responses:
+        '200':
+          description: Instrument updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/{scenario_name}/measurements:
+    get:
+      tags: [Measurements]
+      summary: List measurements with filtering and pagination
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: timestamp
+        - name: sort_dir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: lat_min
+          in: query
+          schema:
+            type: number
+            format: double
+        - name: lat_max
+          in: query
+          schema:
+            type: number
+            format: double
+        - name: lon_min
+          in: query
+          schema:
+            type: number
+            format: double
+        - name: lon_max
+          in: query
+          schema:
+            type: number
+            format: double
+        - name: measurement_type_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: mission_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: label_ids
+          in: query
+          description: Comma-separated label UUIDs
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated measurements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMeasurements'
+    post:
+      tags: [Measurements]
+      summary: Create measurement
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementCreate'
+      responses:
+        '201':
+          description: Measurement created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementResponse'
+
+  /api/v1/{scenario_name}/measurements/{measurement_id}:
+    get:
+      tags: [Measurements]
+      summary: Get measurement by id
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MeasurementId'
+      responses:
+        '200':
+          description: Measurement details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Measurements]
+      summary: Update measurement
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MeasurementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementUpdate'
+      responses:
+        '200':
+          description: Measurement updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Measurements]
+      summary: Delete measurement
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MeasurementId'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/{scenario_name}/measurements/{measurement_id}/labels:
+    post:
+      tags: [Measurements, Labels]
+      summary: Assign label to measurement
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MeasurementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementLabelCreate'
+      responses:
+        '201':
+          description: Label assignment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  measurement_id:
+                    type: string
+                    format: uuid
+                  label_id:
+                    type: string
+                    format: uuid
+                  reason:
+                    type: string
+                    nullable: true
+                  created_at:
+                    type: string
+                    format: date-time
+
+  /api/v1/{scenario_name}/labels:
+    get:
+      tags: [Labels]
+      summary: List labels
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      responses:
+        '200':
+          description: Labels list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LabelResponse'
+    post:
+      tags: [Labels]
+      summary: Create label
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabelCreate'
+      responses:
+        '201':
+          description: Label created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelResponse'
+
+  /api/v1/{scenario_name}/visitors:
+    get:
+      tags: [Visitors]
+      summary: List visitors
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated visitors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVisitors'
+    post:
+      tags: [Visitors]
+      summary: Create visitor
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitorCreate'
+      responses:
+        '201':
+          description: Visitor created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitorResponse'
+
+  /api/v1/{scenario_name}/visitors/{visitor_id}:
+    get:
+      tags: [Visitors]
+      summary: Get visitor by id
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/VisitorId'
+      responses:
+        '200':
+          description: Visitor details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/{scenario_name}/visitors/{visitor_id}/body-measurements:
+    get:
+      tags: [Visitors]
+      summary: List body measurements for visitor
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/VisitorId'
+      responses:
+        '200':
+          description: Body measurements list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BodyMeasurementResponse'
+    post:
+      tags: [Visitors]
+      summary: Create body measurement for visitor
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/VisitorId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BodyMeasurementCreate'
+      responses:
+        '201':
+          description: Body measurement created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyMeasurementResponse'
+
+  /api/v1/{scenario_name}/visitors/{visitor_id}/tracks:
+    get:
+      tags: [Visitor Tracks]
+      summary: List tracks for visitor
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/VisitorId'
+      responses:
+        '200':
+          description: Visitor tracks list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisitorTrackResponse'
+    post:
+      tags: [Visitor Tracks]
+      summary: Create track for visitor
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/VisitorId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitorTrackCreate'
+      responses:
+        '201':
+          description: Track created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitorTrackResponse'
+
+  /api/v1/{scenario_name}/visitor-tracks:
+    get:
+      tags: [Visitor Tracks]
+      summary: List all visitor tracks in scenario
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/Page'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Paginated visitor tracks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVisitorTracks'
+
+  /api/v1/{scenario_name}/missions:
+    get:
+      tags: [Missions]
+      summary: List missions
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [planned, active, completed, cancelled]
+      responses:
+        '200':
+          description: Paginated missions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMissions'
+    post:
+      tags: [Missions]
+      summary: Create mission
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MissionCreate'
+      responses:
+        '201':
+          description: Mission created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionResponse'
+
+  /api/v1/{scenario_name}/missions/{mission_id}:
+    get:
+      tags: [Missions]
+      summary: Get mission by id
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MissionId'
+      responses:
+        '200':
+          description: Mission details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Missions]
+      summary: Update mission
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MissionUpdate'
+      responses:
+        '200':
+          description: Mission updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionResponse'
+    delete:
+      tags: [Missions]
+      summary: Delete mission
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MissionId'
+      responses:
+        '204':
+          description: Mission deleted
+
+  /api/v1/{scenario_name}/missions/{mission_id}/assignments:
+    post:
+      tags: [Missions]
+      summary: Assign instrument to mission
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MissionAssignmentCreate'
+      responses:
+        '201':
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionAssignmentResponse'
+
+  /api/v1/{scenario_name}/aggregation/map-data:
+    get:
+      tags: [Aggregation]
+      summary: Map feature data for measurements
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - name: lat_min
+          in: query
+          schema: { type: number, format: double }
+        - name: lat_max
+          in: query
+          schema: { type: number, format: double }
+        - name: lon_min
+          in: query
+          schema: { type: number, format: double }
+        - name: lon_max
+          in: query
+          schema: { type: number, format: double }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 2000, default: 500 }
+      responses:
+        '200':
+          description: Feature collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: FeatureCollection
+                  features:
+                    type: array
+                    items:
+                      type: object
+                  count:
+                    type: integer
+
+  /api/v1/{scenario_name}/aggregation/measurements/aggregate:
+    get:
+      tags: [Aggregation]
+      summary: Aggregate measurement statistics
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - name: measurement_type_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from_date
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to_date
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Aggregation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aggregations:
+                    type: array
+                    items:
+                      type: object
+
+  /api/v1/{scenario_name}/aggregation/visitors/density:
+    get:
+      tags: [Aggregation]
+      summary: Visitor density grid
+      parameters:
+        - $ref: '#/components/parameters/ScenarioName'
+        - name: lat_min
+          in: query
+          schema: { type: number, format: double }
+        - name: lat_max
+          in: query
+          schema: { type: number, format: double }
+        - name: lon_min
+          in: query
+          schema: { type: number, format: double }
+        - name: lon_max
+          in: query
+          schema: { type: number, format: double }
+        - name: cell_size
+          in: query
+          schema: { type: number, format: double, default: 0.01 }
+      responses:
+        '200':
+          description: Density grid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  density_grid:
+                    type: array
+                    items:
+                      type: object
+                  cell_size_degrees:
+                    type: number
+
+components:
+  parameters:
+    ScenarioName:
+      name: scenario_name
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Scenario identifier/name, e.g. drill-2026
+    MeasurementId:
+      name: measurement_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VisitorId:
+      name: visitor_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MissionId:
+      name: mission_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    Unauthorized:
+      description: Not authenticated / invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflict / duplicate resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+
+    Token:
+      type: object
+      required: [access_token, token_type]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: bearer
+
+    ScenarioCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        type:
+          type: string
+          enum: [drill, real_event, training, other]
+          default: drill
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+
+    ScenarioResponse:
+      type: object
+      required: [id, name, type, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [drill, real_event, training, other]
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      required: [name, email, role, password]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+
+    UserResponse:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+
+    MeasurementTypeCreate:
+      type: object
+      required: [name, unit]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        unit:
+          type: string
+          maxLength: 50
+
+    MeasurementTypeResponse:
+      type: object
+      required: [id, name, unit]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        unit: { type: string }
+
+    InstrumentCreate:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, maxLength: 200 }
+        type: { type: string, maxLength: 100 }
+        calibration_date:
+          type: string
+          format: date-time
+          nullable: true
+
+    InstrumentUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 200 }
+        type: { type: string, maxLength: 100 }
+        calibration_date:
+          type: string
+          format: date-time
+          nullable: true
+
+    InstrumentResponse:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        calibration_date:
+          type: string
+          format: date-time
+          nullable: true
+
+    MeasurementCreate:
+      type: object
+      required:
+        [timestamp, location, measurement_type_id, value, unit, instrument_id]
+      properties:
+        timestamp: { type: string, format: date-time }
+        location:
+          $ref: '#/components/schemas/GeoJSONPoint'
+        measurement_type_id: { type: string, format: uuid }
+        value: { type: number, format: float }
+        unit: { type: string, maxLength: 50 }
+        instrument_id: { type: string, format: uuid }
+        mission_id:
+          type: string
+          format: uuid
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    MeasurementUpdate:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        location:
+          $ref: '#/components/schemas/GeoJSONPoint'
+        value: { type: number, format: float }
+        unit: { type: string, maxLength: 50 }
+        mission_id:
+          type: string
+          format: uuid
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    MeasurementResponse:
+      type: object
+      required:
+        [id, scenario_id, timestamp, measurement_type_id, value, unit, instrument_id, metadata, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
+        location:
+          $ref: '#/components/schemas/GeoJSONPoint'
+        measurement_type_id: { type: string, format: uuid }
+        value: { type: number, format: float }
+        unit: { type: string }
+        instrument_id: { type: string, format: uuid }
+        mission_id:
+          type: string
+          format: uuid
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        measurement_type:
+          $ref: '#/components/schemas/MeasurementTypeResponse'
+        instrument:
+          $ref: '#/components/schemas/InstrumentResponse'
+
+    LabelCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+
+    LabelResponse:
+      type: object
+      required: [id, scenario_id, name]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid }
+        name: { type: string }
+        description:
+          type: string
+          nullable: true
+
+    MeasurementLabelCreate:
+      type: object
+      required: [label_id]
+      properties:
+        label_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          nullable: true
+          maxLength: 500
+
+    VisitorCreate:
+      type: object
+      properties:
+        demographics:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          nullable: true
+          items: { type: string }
+
+    VisitorResponse:
+      type: object
+      required: [id, scenario_id, created_at, demographics]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        demographics:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          nullable: true
+          items: { type: string }
+
+    BodyMeasurementCreate:
+      type: object
+      required: [timestamp, type, value, unit]
+      properties:
+        timestamp: { type: string, format: date-time }
+        type: { type: string, maxLength: 100 }
+        value: { type: number, format: float }
+        unit: { type: string, maxLength: 50 }
+
+    BodyMeasurementResponse:
+      type: object
+      required: [id, visitor_id, timestamp, type, value, unit]
+      properties:
+        id: { type: string, format: uuid }
+        visitor_id: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
+        type: { type: string }
+        value: { type: number, format: float }
+        unit: { type: string }
+
+    VisitorTrackCreate:
+      type: object
+      required: [geom]
+      properties:
+        geom:
+          $ref: '#/components/schemas/GeoJSONLineString'
+
+    VisitorTrackResponse:
+      type: object
+      required: [id, visitor_id, recorded_at]
+      properties:
+        id: { type: string, format: uuid }
+        visitor_id: { type: string, format: uuid }
+        geom:
+          $ref: '#/components/schemas/GeoJSONLineString'
+        recorded_at: { type: string, format: date-time }
+
+    MissionCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 200 }
+        description:
+          type: string
+          nullable: true
+          maxLength: 1000
+        status:
+          type: string
+          enum: [planned, active, completed, cancelled]
+          default: planned
+        target_area:
+          $ref: '#/components/schemas/GeoJSONPolygon'
+
+    MissionUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 200 }
+        description:
+          type: string
+          nullable: true
+          maxLength: 1000
+        status:
+          type: string
+          enum: [planned, active, completed, cancelled]
+        target_area:
+          $ref: '#/components/schemas/GeoJSONPolygon'
+
+    MissionResponse:
+      type: object
+      required: [id, scenario_id, name, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid }
+        name: { type: string }
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [planned, active, completed, cancelled]
+        target_area:
+          $ref: '#/components/schemas/GeoJSONPolygon'
+        created_at: { type: string, format: date-time }
+
+    MissionAssignmentCreate:
+      type: object
+      required: [instrument_id]
+      properties:
+        instrument_id: { type: string, format: uuid }
+
+    MissionAssignmentResponse:
+      type: object
+      required: [id, mission_id, instrument_id, assigned_at]
+      properties:
+        id: { type: string, format: uuid }
+        mission_id: { type: string, format: uuid }
+        instrument_id: { type: string, format: uuid }
+        assigned_at: { type: string, format: date-time }
+
+    GeoJSONPoint:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [Point]
+        coordinates:
+          type: array
+          minItems: 2
+          maxItems: 3
+          items:
+            type: number
+            format: double
+
+    GeoJSONLineString:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [LineString]
+        coordinates:
+          type: array
+          minItems: 2
+          items:
+            type: array
+            minItems: 2
+            items:
+              type: number
+              format: double
+
+    GeoJSONPolygon:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [Polygon]
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: array
+              minItems: 2
+              items:
+                type: number
+                format: double
+
+    PaginatedMeasurements:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeasurementResponse'
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        pages: { type: integer }
+
+    PaginatedVisitors:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitorResponse'
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        pages: { type: integer }
+
+    PaginatedMissions:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissionResponse'
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        pages: { type: integer }
+
+    PaginatedVisitorTracks:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitorTrackResponse'
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        pages: { type: integer }
+
+    PaginatedUsers:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        pages: { type: integer }
+
+x-websocket:
+  /stream:
+    description: Real-time event stream endpoint (not part of OpenAPI HTTP paths)
+    query:
+      topics:
+        type: string
+        description: Comma-separated event names
+      bbox:
+        type: string
+        description: lat_min,lat_max,lon_min,lon_max
+      mission_id:
+        type: string
+        format: uuid
+    event_format:
+      type: object
+      properties:
+        event:
+          type: string
+          example: measurement.created
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object

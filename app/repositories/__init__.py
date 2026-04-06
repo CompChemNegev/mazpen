@@ -2,6 +2,7 @@ from app.repositories.base import BaseRepository
 from app.repositories.measurement_repository import (
     InstrumentRepository,
     MeasurementRepository,
+    ScenarioRepository,
     MeasurementTypeRepository,
 )
 from app.repositories.visitor_repository import (
@@ -17,6 +18,7 @@ __all__ = [
     "BaseRepository",
     "InstrumentRepository",
     "MeasurementRepository",
+    "ScenarioRepository",
     "MeasurementTypeRepository",
     "BodyMeasurementRepository",
     "VisitorRepository",

@@ -16,6 +16,7 @@ class VisitorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    scenario_id: uuid.UUID
     created_at: datetime
     demographics: dict[str, Any]
     tags: Optional[list[str]]

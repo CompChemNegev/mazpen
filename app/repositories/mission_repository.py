@@ -16,13 +16,25 @@ class MissionRepository(BaseRepository[Mission]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(Mission, db)
 
+    async def get_by_id(
+        self,
+        record_id: uuid.UUID,
+        scenario_id: uuid.UUID | None = None,
+    ) -> Mission | None:
+        stmt = select(Mission).where(Mission.id == record_id)
+        if scenario_id is not None:
+            stmt = stmt.where(Mission.scenario_id == scenario_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_all_paginated(
         self,
+        scenario_id: uuid.UUID,
         skip: int = 0,
         limit: int = 20,
         status: Optional[str] = None,
     ) -> tuple[Sequence[Mission], int]:
-        conds: list[Any] = []
+        conds: list[Any] = [Mission.scenario_id == scenario_id]
         if status:
             conds.append(Mission.status == status)
 

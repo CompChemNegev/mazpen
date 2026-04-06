@@ -15,6 +15,7 @@ from app.api.routes import (
     labels_router,
     measurements_router,
     missions_router,
+    scenarios_router,
     tracks_router,
     type_router,
     users_router,
@@ -108,6 +109,7 @@ async def generic_handler(request: Request, exc: Exception) -> JSONResponse:
 API_PREFIX = "/api/v1"
 
 app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(scenarios_router, prefix=API_PREFIX)
 app.include_router(measurements_router, prefix=API_PREFIX)
 app.include_router(type_router, prefix=API_PREFIX)
 app.include_router(instrument_router, prefix=API_PREFIX)

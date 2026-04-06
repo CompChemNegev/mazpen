@@ -3,16 +3,18 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, Security
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import decode_token
+from app.models.scenario import Scenario
 from app.models.user import User, UserRole
+from app.repositories.measurement_repository import ScenarioRepository
 from app.repositories.user_repository import UserRepository
-from app.utils.exceptions import ForbiddenException, UnauthorizedException
+from app.utils.exceptions import ForbiddenException, NotFoundException, UnauthorizedException
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
@@ -49,7 +51,18 @@ def require_roles(*roles: UserRole):
     return _check
 
 
+async def get_scenario(
+    scenario_name: str,
+    db: AsyncSession = Depends(get_db),
+) -> Scenario:
+    scenario = await ScenarioRepository(db).get_by_name(scenario_name)
+    if not scenario:
+        raise NotFoundException(f"Scenario '{scenario_name}' not found")
+    return scenario
+
+
 # Convenience aliases
 CurrentUser = Annotated[User, Depends(get_current_user)]
 AdminOrOperator = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.OPERATOR))]
 AdminOnly = Annotated[User, Depends(require_roles(UserRole.ADMIN))]
+CurrentScenario = Annotated[Scenario, Depends(get_scenario)]

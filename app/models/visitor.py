@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
-    pass
+    from app.models.scenario import Scenario
 
 
 class Visitor(Base):
@@ -20,6 +20,12 @@ class Visitor(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -36,6 +42,7 @@ class Visitor(Base):
     body_measurements: Mapped[list["BodyMeasurement"]] = relationship(
         "BodyMeasurement", back_populates="visitor", cascade="all, delete-orphan"
     )
+    scenario: Mapped["Scenario"] = relationship("Scenario", back_populates="visitors")
     tracks: Mapped[list["VisitorTrack"]] = relationship(
         "VisitorTrack", back_populates="visitor", cascade="all, delete-orphan"
     )

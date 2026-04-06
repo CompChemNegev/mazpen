@@ -12,17 +12,28 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.measurement import Measurement
+    from app.models.scenario import Scenario
 
 
 class Label(Base):
     __tablename__ = "labels"
+    __table_args__ = (
+        UniqueConstraint("scenario_id", "name", name="uq_labels_scenario_name"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    scenario: Mapped["Scenario"] = relationship("Scenario", back_populates="labels")
     measurement_labels: Mapped[list["MeasurementLabel"]] = relationship(
         "MeasurementLabel", back_populates="label"
     )

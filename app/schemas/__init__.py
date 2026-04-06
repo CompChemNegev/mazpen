@@ -18,6 +18,7 @@ from app.schemas.mission import (
     MissionResponse,
     MissionUpdate,
 )
+from app.schemas.scenario import ScenarioCreate, ScenarioResponse
 from app.schemas.user import LoginRequest, Token, TokenData, UserCreate, UserResponse, UserUpdate
 from app.schemas.visitor import (
     BodyMeasurementCreate,
@@ -48,6 +49,8 @@ __all__ = [
     "MissionCreate",
     "MissionResponse",
     "MissionUpdate",
+    "ScenarioCreate",
+    "ScenarioResponse",
     "LoginRequest",
     "Token",
     "TokenData",

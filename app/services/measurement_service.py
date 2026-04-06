@@ -55,11 +55,16 @@ class MeasurementService:
     # ── Measurement ───────────────────────────────────────────────────────────
 
     async def create_measurement(
-        self, data: MeasurementCreate, event_publisher: Any = None
+        self,
+        scenario_id: uuid.UUID,
+        data: MeasurementCreate,
+        event_publisher: Any = None,
     ) -> Measurement:
-        measurement = await self.repo.create_measurement(data.model_dump())
+        payload = data.model_dump()
+        payload["scenario_id"] = scenario_id
+        measurement = await self.repo.create_measurement(payload)
         # Reload with relations
-        measurement = await self.repo.get_by_id(measurement.id)
+        measurement = await self.repo.get_by_id(measurement.id, scenario_id=scenario_id)
         if event_publisher:
             await event_publisher(
                 {
@@ -69,18 +74,24 @@ class MeasurementService:
             )
         return measurement  # type: ignore[return-value]
 
-    async def get_measurement(self, measurement_id: uuid.UUID) -> Measurement:
-        measurement = await self.repo.get_by_id(measurement_id)
+    async def get_measurement(
+        self,
+        scenario_id: uuid.UUID,
+        measurement_id: uuid.UUID,
+    ) -> Measurement:
+        measurement = await self.repo.get_by_id(measurement_id, scenario_id=scenario_id)
         if not measurement:
             raise NotFoundException("Measurement not found")
         return measurement
 
     async def list_measurements(
         self,
+        scenario_id: uuid.UUID,
         filters: MeasurementFilterParams,
         pagination: PaginationParams,
     ) -> tuple[list[Measurement], int]:
         items, total = await self.repo.get_filtered(
+            scenario_id=scenario_id,
             filters=filters,
             skip=pagination.offset,
             limit=pagination.limit,
@@ -91,15 +102,16 @@ class MeasurementService:
 
     async def update_measurement(
         self,
+        scenario_id: uuid.UUID,
         measurement_id: uuid.UUID,
         data: MeasurementUpdate,
         event_publisher: Any = None,
     ) -> Measurement:
-        measurement = await self.get_measurement(measurement_id)
+        measurement = await self.get_measurement(scenario_id, measurement_id)
         updated = await self.repo.update_measurement(
             measurement, data.model_dump(exclude_unset=True, exclude_none=True)
         )
-        updated = await self.repo.get_by_id(updated.id)
+        updated = await self.repo.get_by_id(updated.id, scenario_id=scenario_id)
         if event_publisher:
             await event_publisher(
                 {
@@ -109,18 +121,19 @@ class MeasurementService:
             )
         return updated  # type: ignore[return-value]
 
-    async def delete_measurement(self, measurement_id: uuid.UUID) -> None:
-        measurement = await self.get_measurement(measurement_id)
+    async def delete_measurement(self, scenario_id: uuid.UUID, measurement_id: uuid.UUID) -> None:
+        measurement = await self.get_measurement(scenario_id, measurement_id)
         await self.repo.delete(measurement)
 
     async def assign_label(
         self,
+        scenario_id: uuid.UUID,
         measurement_id: uuid.UUID,
         body: MeasurementLabelCreate,
         event_publisher: Any = None,
     ) -> Any:
-        await self.get_measurement(measurement_id)
-        label = await self.label_repo.get_by_id(body.label_id)
+        await self.get_measurement(scenario_id, measurement_id)
+        label = await self.label_repo.get_by_id(body.label_id, scenario_id=scenario_id)
         if not label:
             raise NotFoundException("Label not found")
         assoc = await self.label_assoc_repo.assign_label(
@@ -144,6 +157,7 @@ class MeasurementService:
             return {}
         return {
             "id": str(m.id),
+            "scenario_id": str(m.scenario_id),
             "timestamp": m.timestamp.isoformat(),
             "location": wkb_to_geojson(m.location),
             "value": m.value,

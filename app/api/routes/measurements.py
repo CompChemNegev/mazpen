@@ -6,8 +6,9 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AdminOrOperator, CurrentUser
+from app.api.deps import AdminOrOperator, CurrentScenario, CurrentUser
 from app.core.database import get_db
+from app.models.scenario import Scenario
 from app.schemas.common import PaginatedResponse
 from app.schemas.label import MeasurementLabelCreate
 from app.schemas.measurement import (
@@ -27,9 +28,9 @@ from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.websocket.connection_manager import event_bus
 
-router = APIRouter(prefix="/measurements", tags=["Measurements"])
-type_router = APIRouter(prefix="/measurement-types", tags=["Measurement Types"])
-instrument_router = APIRouter(prefix="/instruments", tags=["Instruments"])
+router = APIRouter(prefix="/{scenario_name}/measurements", tags=["Measurements"])
+type_router = APIRouter(prefix="/{scenario_name}/measurement-types", tags=["Measurement Types"])
+instrument_router = APIRouter(prefix="/{scenario_name}/instruments", tags=["Instruments"])
 
 
 def _to_response(m) -> MeasurementResponse:
@@ -37,6 +38,7 @@ def _to_response(m) -> MeasurementResponse:
     loc = wkb_to_geojson(m.location)
     return MeasurementResponse(
         id=m.id,
+        scenario_id=m.scenario_id,
         timestamp=m.timestamp,
         location=loc,
         measurement_type_id=m.measurement_type_id,
@@ -57,6 +59,7 @@ def _to_response(m) -> MeasurementResponse:
 async def create_measurement_type(
     body: MeasurementTypeCreate,
     _: AdminOrOperator,
+    __: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MeasurementTypeResponse:
     from app.models.measurement import MeasurementType
@@ -74,6 +77,7 @@ async def create_measurement_type(
 @type_router.get("", response_model=list[MeasurementTypeResponse])
 async def list_measurement_types(
     _: CurrentUser,
+    __: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> list[MeasurementTypeResponse]:
     from app.repositories.measurement_repository import MeasurementTypeRepository
@@ -88,6 +92,7 @@ async def list_measurement_types(
 async def create_instrument(
     body: InstrumentCreate,
     _: AdminOrOperator,
+    __: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> InstrumentResponse:
     svc = MeasurementService(db)
@@ -98,6 +103,7 @@ async def create_instrument(
 @instrument_router.get("", response_model=list[InstrumentResponse])
 async def list_instruments(
     _: CurrentUser,
+    __: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> list[InstrumentResponse]:
     from app.repositories.measurement_repository import InstrumentRepository
@@ -111,6 +117,7 @@ async def update_instrument(
     instrument_id: uuid.UUID,
     body: InstrumentUpdate,
     _: AdminOrOperator,
+    __: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> InstrumentResponse:
     svc = MeasurementService(db)
@@ -125,6 +132,7 @@ async def create_measurement(
     body: MeasurementCreate,
     background_tasks: BackgroundTasks,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MeasurementResponse:
     svc = MeasurementService(db)
@@ -132,13 +140,14 @@ async def create_measurement(
     async def publish(event: dict) -> None:
         background_tasks.add_task(event_bus.publish, event)
 
-    result = await svc.create_measurement(body, event_publisher=publish)
+    result = await svc.create_measurement(scenario.id, body, event_publisher=publish)
     return _to_response(result)
 
 
 @router.get("", response_model=PaginatedResponse[MeasurementResponse])
 async def list_measurements(
     _: CurrentUser,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -176,7 +185,7 @@ async def list_measurements(
     )
 
     svc = MeasurementService(db)
-    items, total = await svc.list_measurements(filters, pagination)
+    items, total = await svc.list_measurements(scenario.id, filters, pagination)
     responses = [_to_response(m) for m in items]
     return PaginatedResponse.create(items=responses, total=total, params=pagination)
 
@@ -185,10 +194,11 @@ async def list_measurements(
 async def get_measurement(
     measurement_id: uuid.UUID,
     _: CurrentUser,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MeasurementResponse:
     svc = MeasurementService(db)
-    result = await svc.get_measurement(measurement_id)
+    result = await svc.get_measurement(scenario.id, measurement_id)
     return _to_response(result)
 
 
@@ -198,6 +208,7 @@ async def update_measurement(
     body: MeasurementUpdate,
     background_tasks: BackgroundTasks,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MeasurementResponse:
     svc = MeasurementService(db)
@@ -205,7 +216,12 @@ async def update_measurement(
     async def publish(event: dict) -> None:
         background_tasks.add_task(event_bus.publish, event)
 
-    result = await svc.update_measurement(measurement_id, body, event_publisher=publish)
+    result = await svc.update_measurement(
+        scenario.id,
+        measurement_id,
+        body,
+        event_publisher=publish,
+    )
     return _to_response(result)
 
 
@@ -213,10 +229,11 @@ async def update_measurement(
 async def delete_measurement(
     measurement_id: uuid.UUID,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> None:
     svc = MeasurementService(db)
-    await svc.delete_measurement(measurement_id)
+    await svc.delete_measurement(scenario.id, measurement_id)
 
 
 @router.post("/{measurement_id}/labels", status_code=status.HTTP_201_CREATED)
@@ -225,6 +242,7 @@ async def assign_label_to_measurement(
     body: MeasurementLabelCreate,
     background_tasks: BackgroundTasks,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     svc = MeasurementService(db)
@@ -232,7 +250,12 @@ async def assign_label_to_measurement(
     async def publish(event: dict) -> None:
         background_tasks.add_task(event_bus.publish, event)
 
-    assoc = await svc.assign_label(measurement_id, body, event_publisher=publish)
+    assoc = await svc.assign_label(
+        scenario.id,
+        measurement_id,
+        body,
+        event_publisher=publish,
+    )
     return {
         "measurement_id": str(assoc.measurement_id),
         "label_id": str(assoc.label_id),

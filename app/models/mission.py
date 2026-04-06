@@ -14,6 +14,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.measurement import Measurement, Instrument
+    from app.models.scenario import Scenario
 
 
 class MissionStatus(str, enum.Enum):
@@ -26,12 +27,18 @@ class MissionStatus(str, enum.Enum):
 class Mission(Base):
     __tablename__ = "missions"
     __table_args__ = (
+        Index("ix_missions_scenario_id", "scenario_id"),
         Index("ix_missions_status", "status"),
         Index("ix_missions_target_area", "target_area", postgresql_using="gist"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -51,6 +58,7 @@ class Mission(Base):
     measurements: Mapped[list["Measurement"]] = relationship(
         "Measurement", back_populates="mission"
     )
+    scenario: Mapped["Scenario"] = relationship("Scenario", back_populates="missions")
     assignments: Mapped[list["MissionInstrumentAssignment"]] = relationship(
         "MissionInstrumentAssignment",
         back_populates="mission",

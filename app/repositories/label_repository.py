@@ -14,12 +14,27 @@ class LabelRepository(BaseRepository[Label]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(Label, db)
 
-    async def get_by_name(self, name: str) -> Label | None:
-        result = await self.db.execute(select(Label).where(Label.name == name))
+    async def get_by_name(self, scenario_id: uuid.UUID, name: str) -> Label | None:
+        result = await self.db.execute(
+            select(Label).where(Label.scenario_id == scenario_id, Label.name == name)
+        )
         return result.scalar_one_or_none()
 
-    async def get_all_labels(self) -> Sequence[Label]:
-        result = await self.db.execute(select(Label).order_by(Label.name))
+    async def get_by_id(
+        self,
+        record_id: uuid.UUID,
+        scenario_id: uuid.UUID | None = None,
+    ) -> Label | None:
+        stmt = select(Label).where(Label.id == record_id)
+        if scenario_id is not None:
+            stmt = stmt.where(Label.scenario_id == scenario_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_all_labels(self, scenario_id: uuid.UUID) -> Sequence[Label]:
+        result = await self.db.execute(
+            select(Label).where(Label.scenario_id == scenario_id).order_by(Label.name)
+        )
         return result.scalars().all()
 
 

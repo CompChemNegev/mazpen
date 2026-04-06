@@ -15,13 +15,31 @@ class VisitorRepository(BaseRepository[Visitor]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(Visitor, db)
 
+    async def get_by_id(
+        self,
+        record_id: uuid.UUID,
+        scenario_id: uuid.UUID | None = None,
+    ) -> Visitor | None:
+        stmt = select(Visitor).where(Visitor.id == record_id)
+        if scenario_id is not None:
+            stmt = stmt.where(Visitor.scenario_id == scenario_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_with_counts(
-        self, skip: int = 0, limit: int = 20
+        self, scenario_id: uuid.UUID, skip: int = 0, limit: int = 20
     ) -> tuple[Sequence[Visitor], int]:
         total = (
-            await self.db.execute(select(func.count()).select_from(Visitor))
+            await self.db.execute(
+                select(func.count()).select_from(Visitor).where(Visitor.scenario_id == scenario_id)
+            )
         ).scalar_one()
-        result = await self.db.execute(select(Visitor).offset(skip).limit(limit))
+        result = await self.db.execute(
+            select(Visitor)
+            .where(Visitor.scenario_id == scenario_id)
+            .offset(skip)
+            .limit(limit)
+        )
         return result.scalars().all(), total
 
     async def create_visitor(self, data: dict[str, Any]) -> Visitor:
@@ -30,6 +48,7 @@ class VisitorRepository(BaseRepository[Visitor]):
 
     async def get_density(
         self,
+        scenario_id: uuid.UUID,
         lat_min: float | None = None,
         lat_max: float | None = None,
         lon_min: float | None = None,
@@ -45,7 +64,7 @@ class VisitorRepository(BaseRepository[Visitor]):
             func.count(VisitorTrack.id).label("visitor_count"),
         ).group_by(
             func.ST_Centroid(func.ST_SnapToGrid(VisitorTrack.geom, cell_size))
-        )
+        ).join(Visitor, Visitor.id == VisitorTrack.visitor_id).where(Visitor.scenario_id == scenario_id)
         if all(v is not None for v in [lat_min, lat_max, lon_min, lon_max]):
             envelope = func.ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326)
             stmt = stmt.where(func.ST_Within(VisitorTrack.geom, envelope))
@@ -62,9 +81,18 @@ class BodyMeasurementRepository(BaseRepository[BodyMeasurement]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(BodyMeasurement, db)
 
-    async def get_for_visitor(self, visitor_id: uuid.UUID) -> Sequence[BodyMeasurement]:
+    async def get_for_visitor(
+        self,
+        visitor_id: uuid.UUID,
+        scenario_id: uuid.UUID,
+    ) -> Sequence[BodyMeasurement]:
         result = await self.db.execute(
-            select(BodyMeasurement).where(BodyMeasurement.visitor_id == visitor_id)
+            select(BodyMeasurement)
+            .join(Visitor, Visitor.id == BodyMeasurement.visitor_id)
+            .where(
+                BodyMeasurement.visitor_id == visitor_id,
+                Visitor.scenario_id == scenario_id,
+            )
         )
         return result.scalars().all()
 
@@ -79,19 +107,42 @@ class VisitorTrackRepository(BaseRepository[VisitorTrack]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(VisitorTrack, db)
 
-    async def get_for_visitor(self, visitor_id: uuid.UUID) -> Sequence[VisitorTrack]:
+    async def get_for_visitor(
+        self,
+        visitor_id: uuid.UUID,
+        scenario_id: uuid.UUID,
+    ) -> Sequence[VisitorTrack]:
         result = await self.db.execute(
-            select(VisitorTrack).where(VisitorTrack.visitor_id == visitor_id)
+            select(VisitorTrack)
+            .join(Visitor, Visitor.id == VisitorTrack.visitor_id)
+            .where(
+                VisitorTrack.visitor_id == visitor_id,
+                Visitor.scenario_id == scenario_id,
+            )
         )
         return result.scalars().all()
 
     async def get_all_tracks(
-        self, skip: int = 0, limit: int = 50
+        self,
+        scenario_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 50,
     ) -> tuple[Sequence[VisitorTrack], int]:
         total = (
-            await self.db.execute(select(func.count()).select_from(VisitorTrack))
+            await self.db.execute(
+                select(func.count())
+                .select_from(VisitorTrack)
+                .join(Visitor, Visitor.id == VisitorTrack.visitor_id)
+                .where(Visitor.scenario_id == scenario_id)
+            )
         ).scalar_one()
-        result = await self.db.execute(select(VisitorTrack).offset(skip).limit(limit))
+        result = await self.db.execute(
+            select(VisitorTrack)
+            .join(Visitor, Visitor.id == VisitorTrack.visitor_id)
+            .where(Visitor.scenario_id == scenario_id)
+            .offset(skip)
+            .limit(limit)
+        )
         return result.scalars().all(), total
 
     async def create_track(

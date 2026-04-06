@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AdminOnly, AdminOrOperator, CurrentUser
+from app.api.deps import AdminOnly, AdminOrOperator, CurrentScenario, CurrentUser
 from app.core.database import get_db
 from app.schemas.common import PaginatedResponse
 from app.schemas.mission import (
@@ -21,12 +21,13 @@ from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.websocket.connection_manager import event_bus
 
-router = APIRouter(prefix="/missions", tags=["Missions"])
+router = APIRouter(prefix="/{scenario_name}/missions", tags=["Missions"])
 
 
 def _mission_to_response(m) -> MissionResponse:
     return MissionResponse(
         id=m.id,
+        scenario_id=m.scenario_id,
         name=m.name,
         description=m.description,
         status=m.status,
@@ -40,6 +41,7 @@ async def create_mission(
     body: MissionCreate,
     background_tasks: BackgroundTasks,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MissionResponse:
     svc = MissionService(db)
@@ -47,13 +49,14 @@ async def create_mission(
     async def publish(event: dict) -> None:
         background_tasks.add_task(event_bus.publish, event)
 
-    result = await svc.create_mission(body, event_publisher=publish)
+    result = await svc.create_mission(scenario.id, body, event_publisher=publish)
     return _mission_to_response(result)
 
 
 @router.get("", response_model=PaginatedResponse[MissionResponse])
 async def list_missions(
     _: CurrentUser,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -61,7 +64,7 @@ async def list_missions(
 ) -> PaginatedResponse[MissionResponse]:
     pagination = PaginationParams(page=page, limit=limit)
     svc = MissionService(db)
-    items, total = await svc.list_missions(pagination, status=status_filter)
+    items, total = await svc.list_missions(scenario.id, pagination, status=status_filter)
     responses = [_mission_to_response(m) for m in items]
     return PaginatedResponse.create(items=responses, total=total, params=pagination)
 
@@ -70,10 +73,11 @@ async def list_missions(
 async def get_mission(
     mission_id: uuid.UUID,
     _: CurrentUser,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MissionResponse:
     svc = MissionService(db)
-    result = await svc.get_mission(mission_id)
+    result = await svc.get_mission(scenario.id, mission_id)
     return _mission_to_response(result)
 
 
@@ -83,6 +87,7 @@ async def update_mission(
     body: MissionUpdate,
     background_tasks: BackgroundTasks,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MissionResponse:
     svc = MissionService(db)
@@ -90,7 +95,7 @@ async def update_mission(
     async def publish(event: dict) -> None:
         background_tasks.add_task(event_bus.publish, event)
 
-    result = await svc.update_mission(mission_id, body, event_publisher=publish)
+    result = await svc.update_mission(scenario.id, mission_id, body, event_publisher=publish)
     return _mission_to_response(result)
 
 
@@ -98,10 +103,11 @@ async def update_mission(
 async def delete_mission(
     mission_id: uuid.UUID,
     _: AdminOnly,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> None:
     svc = MissionService(db)
-    await svc.delete_mission(mission_id)
+    await svc.delete_mission(scenario.id, mission_id)
 
 
 @router.post(
@@ -113,8 +119,9 @@ async def assign_instrument_to_mission(
     mission_id: uuid.UUID,
     body: MissionAssignmentCreate,
     _: AdminOrOperator,
+    scenario: CurrentScenario,
     db: AsyncSession = Depends(get_db),
 ) -> MissionAssignmentResponse:
     svc = MissionService(db)
-    result = await svc.add_assignment(mission_id, body)
+    result = await svc.add_assignment(scenario.id, mission_id, body)
     return MissionAssignmentResponse.model_validate(result)
