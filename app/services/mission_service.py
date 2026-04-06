@@ -12,6 +12,8 @@ from app.schemas.mission import MissionAssignmentCreate, MissionCreate, MissionU
 from app.utils.exceptions import NotFoundException
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
+from app.schemas.filter import FilterQuery
+from app.repositories.base import BaseRepository
 
 
 class MissionService:
@@ -59,6 +61,19 @@ class MissionService:
             skip=pagination.offset, limit=pagination.limit, status=status
         )
         return list(items), total
+
+        async def search_missions(
+            self,
+            scenario_id: uuid.UUID,
+            filter_query: FilterQuery,
+        ) -> list[Mission]:
+            """Search missions using structured filters."""
+            repo = BaseRepository(Mission, self.db)
+            try:
+                results = await repo.filter_by(filter_query, scenario_id=scenario_id)
+            except ValueError as e:
+                raise NotFoundException(f"Invalid filter: {str(e)}")
+            return list(results)
 
     async def update_mission(
         self,

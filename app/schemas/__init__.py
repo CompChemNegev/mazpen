@@ -18,6 +18,7 @@ from app.schemas.mission import (
     MissionResponse,
     MissionUpdate,
 )
+from app.schemas.filter import FilterCondition, FilterOperator, FilterQuery
 from app.schemas.scenario import ScenarioCreate, ScenarioResponse
 from app.schemas.user import LoginRequest, Token, TokenData, UserCreate, UserResponse, UserUpdate
 from app.schemas.visitor import (
@@ -49,6 +50,9 @@ __all__ = [
     "MissionCreate",
     "MissionResponse",
     "MissionUpdate",
+        "FilterCondition",
+        "FilterOperator",
+        "FilterQuery",
     "ScenarioCreate",
     "ScenarioResponse",
     "LoginRequest",

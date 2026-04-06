@@ -13,6 +13,7 @@ from app.repositories.visitor_repository import (
 from app.repositories.mission_repository import MissionRepository
 from app.repositories.label_repository import LabelRepository, MeasurementLabelRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.field_registry import FieldValidator
 
 __all__ = [
     "BaseRepository",
@@ -27,4 +28,5 @@ __all__ = [
     "LabelRepository",
     "MeasurementLabelRepository",
     "UserRepository",
+     "FieldValidator",
 ]

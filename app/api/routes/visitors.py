@@ -20,6 +20,7 @@ from app.services.visitor_service import VisitorService
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.websocket.connection_manager import event_bus
+from app.schemas.filter import FilterQuery
 
 router = APIRouter(prefix="/{scenario_name}/visitors", tags=["Visitors"])
 tracks_router = APIRouter(prefix="/{scenario_name}/visitor-tracks", tags=["Visitor Tracks"])
@@ -62,6 +63,18 @@ async def list_visitors(
     responses = [VisitorResponse.model_validate(v) for v in items]
     return PaginatedResponse.create(items=responses, total=total, params=pagination)
 
+
+    @router.post("/search", response_model=list[VisitorResponse])
+    async def search_visitors(
+        body: FilterQuery,
+        _: CurrentUser,
+        scenario: CurrentScenario,
+        db: AsyncSession = Depends(get_db),
+    ) -> list[VisitorResponse]:
+        """Search visitors using structured filters."""
+        svc = VisitorService(db)
+        items = await svc.search_visitors(scenario.id, body)
+        return [VisitorResponse.model_validate(v) for v in items]
 
 @router.get("/{visitor_id}", response_model=VisitorResponse)
 async def get_visitor(

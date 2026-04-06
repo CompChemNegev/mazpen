@@ -27,6 +27,7 @@ from app.utils.exceptions import ConflictException, NotFoundException
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.websocket.connection_manager import event_bus
+from app.schemas.filter import FilterQuery
 
 router = APIRouter(prefix="/{scenario_name}/measurements", tags=["Measurements"])
 type_router = APIRouter(prefix="/{scenario_name}/measurement-types", tags=["Measurement Types"])
@@ -189,6 +190,33 @@ async def list_measurements(
     responses = [_to_response(m) for m in items]
     return PaginatedResponse.create(items=responses, total=total, params=pagination)
 
+
+@router.post("/search", response_model=list[MeasurementResponse])
+async def search_measurements(
+        body: FilterQuery,
+        _: CurrentUser,
+        scenario: CurrentScenario,
+        db: AsyncSession = Depends(get_db),
+) -> list[MeasurementResponse]:
+        """
+        Search measurements using structured filters.
+    
+        Example request:
+        ```json
+        {
+            "filters": [
+                {"field": "value", "op": "gte", "value": 50.5},
+                {"field": "unit", "op": "eq", "value": "meters"}
+            ],
+            "logic": "and",
+            "skip": 0,
+            "limit": 20
+        }
+        ```
+        """
+        svc = MeasurementService(db)
+        items = await svc.search_measurements(scenario.id, body)
+        return [_to_response(m) for m in items]
 
 @router.get("/{measurement_id}", response_model=MeasurementResponse)
 async def get_measurement(

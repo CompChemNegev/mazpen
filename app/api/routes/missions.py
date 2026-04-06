@@ -20,6 +20,7 @@ from app.services.mission_service import MissionService
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
 from app.websocket.connection_manager import event_bus
+from app.schemas.filter import FilterQuery
 
 router = APIRouter(prefix="/{scenario_name}/missions", tags=["Missions"])
 
@@ -68,6 +69,18 @@ async def list_missions(
     responses = [_mission_to_response(m) for m in items]
     return PaginatedResponse.create(items=responses, total=total, params=pagination)
 
+
+    @router.post("/search", response_model=list[MissionResponse])
+    async def search_missions(
+        body: FilterQuery,
+        _: CurrentUser,
+        scenario: CurrentScenario,
+        db: AsyncSession = Depends(get_db),
+    ) -> list[MissionResponse]:
+        """Search missions using structured filters."""
+        svc = MissionService(db)
+        items = await svc.search_missions(scenario.id, body)
+        return [_mission_to_response(m) for m in items]
 
 @router.get("/{mission_id}", response_model=MissionResponse)
 async def get_mission(

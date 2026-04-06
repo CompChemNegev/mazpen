@@ -23,6 +23,8 @@ from app.schemas.label import MeasurementLabelCreate
 from app.utils.exceptions import NotFoundException
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
+from app.schemas.filter import FilterQuery
+from app.repositories.base import BaseRepository
 
 
 class MeasurementService:
@@ -99,6 +101,24 @@ class MeasurementService:
             sort_dir=pagination.sort_dir,
         )
         return list(items), total
+
+        async def search_measurements(
+            self,
+            scenario_id: uuid.UUID,
+            filter_query: FilterQuery,
+        ) -> list[Measurement]:
+            """
+            Search measurements using structured filters.
+        
+            This demonstrates the BaseRepository.filter_by() pattern with FilterQuery.
+            Provides flexible, type-safe filtering across any measurable field.
+            """
+            repo = BaseRepository(Measurement, self.db)
+            try:
+                results = await repo.filter_by(filter_query, scenario_id=scenario_id)
+            except ValueError as e:
+                raise NotFoundException(f"Invalid filter: {str(e)}")
+            return list(results)
 
     async def update_measurement(
         self,
