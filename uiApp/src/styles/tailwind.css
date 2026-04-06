@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-safe: #22c55e;
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-sidebar: #0f172a;
+  --color-sidebar-hover: #1e293b;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #64748b; border-radius: 3px; }
+
+/* Leaflet dark mode */
+.dark .leaflet-tile-pane { filter: brightness(0.7) invert(1) contrast(1.2) hue-rotate(200deg) saturate(0.3); }
+.dark .leaflet-control-zoom a { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+.dark .leaflet-popup-content-wrapper { background: #1e293b; color: #e2e8f0; }
+.dark .leaflet-popup-tip { background: #1e293b; }
+
+/* Offline indicator pulse */
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
