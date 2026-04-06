@@ -13,6 +13,7 @@ from app.schemas.visitor import (
     BodyMeasurementCreate,
     BodyMeasurementResponse,
     VisitorCreate,
+    VisitorIntakeUpdate,
     VisitorResponse,
     VisitorTrackCreate,
     VisitorTrackResponse,
@@ -89,6 +90,21 @@ async def get_visitor(
     result = await svc.get_visitor(scenario.id, visitor_id)
     return VisitorResponse.model_validate(result)
 
+
+@router.patch("/{visitor_id}", response_model=VisitorResponse)
+async def update_visitor(
+    visitor_id: uuid.UUID,
+    body: VisitorIntakeUpdate,
+    _: AdminOrOperator,
+    scenario: CurrentScenario,
+    db: AsyncSession = Depends(get_db),
+) -> VisitorResponse:
+    svc = VisitorService(db)
+    result = await svc.update_visitor_intake(scenario.id, visitor_id, body)
+    return VisitorResponse.model_validate(result)
+
+
+# ── Body Measurements ─────────────────────────────────────────────────────────
 
 @router.post(
     "/{visitor_id}/body-measurements",

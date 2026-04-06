@@ -112,7 +112,7 @@ async def update_mission(
     return _mission_to_response(result)
 
 
-@router.delete("/{mission_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{mission_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_mission(
     mission_id: uuid.UUID,
     _: AdminOnly,

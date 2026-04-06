@@ -2,13 +2,19 @@ import { useState, ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
-import { incidents as mockIncidents, alerts as mockAlerts, Incident, Alert } from '../data/mockData';
-import { api } from '../api/client';
-import { useApi } from '../api/useApi';
+import { useScenario } from '../context/ScenarioContext';
 import {
   FileText, Map, Globe, Users, BarChart3, Settings,
   Bell, Moon, Sun, Menu, X, ChevronDown, Shield, LogOut, User, Languages
 } from 'lucide-react';
+
+type Alert = {
+  id: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  timestamp: string;
+  read: boolean;
+};
 
 const navKeys = [
   { to: '/field-reports', icon: FileText, key: 'nav.fieldReports' },
@@ -22,17 +28,13 @@ const navKeys = [
 export default function GlobalLayout({ children }: { children: ReactNode }) {
   const { dark, toggle } = useTheme();
   const { lang, setLang, t, dir } = useLang();
+  const { scenarios, active, setActive } = useScenario();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [incidentOpen, setIncidentOpen] = useState(false);
+  const [scenarioOpen, setScenarioOpen] = useState(false);
 
-  const { data: apiIncidents } = useApi<Incident[]>(() => api.getIncidents(), []);
-  const { data: apiAlerts } = useApi<Alert[]>(() => api.getAlerts(), []);
-  const incidents = apiIncidents ?? mockIncidents;
-  const alerts = apiAlerts ?? mockAlerts;
-
-  const [activeIncident, setActiveIncident] = useState(incidents[0]);
+  const alerts: Alert[] = [];
   const unreadAlerts = alerts.filter(a => !a.read).length;
 
   const isGIS = location.pathname === '/gis-dashboard';
@@ -107,30 +109,30 @@ export default function GlobalLayout({ children }: { children: ReactNode }) {
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Incident selector */}
+          {/* Scenario selector */}
           <div className="relative">
             <button
-              onClick={() => setIncidentOpen(!incidentOpen)}
+              onClick={() => setScenarioOpen(!scenarioOpen)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm"
             >
-              <span className={`w-2 h-2 rounded-full ${activeIncident.status === 'active' ? 'bg-red-500 pulse-dot' : 'bg-yellow-500'}`} />
-              <span className="hidden sm:inline font-medium truncate max-w-[200px]">{activeIncident.name}</span>
-              <span className="sm:hidden font-medium">{activeIncident.id}</span>
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="hidden sm:inline font-medium truncate max-w-[200px]">{active?.description ?? active?.name ?? 'Select scenario'}</span>
+              <span className="sm:hidden font-medium">{active?.name ?? '...'}</span>
               <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
             </button>
-            {incidentOpen && (
+            {scenarioOpen && (
               <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-1 z-50">
-                {incidents.map(inc => (
+                {scenarios.map(sc => (
                   <button
-                    key={inc.id}
-                    onClick={() => { setActiveIncident(inc); setIncidentOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${inc.id === activeIncident.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                    key={sc.id}
+                    onClick={() => { setActive(sc); setScenarioOpen(false); }}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${sc.id === active?.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
                   >
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${inc.status === 'active' ? 'bg-red-500' : inc.status === 'monitoring' ? 'bg-yellow-500' : 'bg-green-500'}`} />
-                      <span className="font-medium">{inc.name}</span>
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="font-medium">{sc.description ?? sc.name}</span>
                     </div>
-                    <div className="text-xs text-gray-500 ml-4">{inc.type} · {inc.location}</div>
+                    <div className="text-xs text-gray-500 ml-4">{sc.type.replace(/_/g, ' ')} · {sc.name}</div>
                   </button>
                 ))}
               </div>
@@ -204,8 +206,8 @@ export default function GlobalLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Close popovers */}
-      {(notifOpen || incidentOpen) && (
-        <div className="fixed inset-0 z-20" onClick={() => { setNotifOpen(false); setIncidentOpen(false); }} />
+      {(notifOpen || scenarioOpen) && (
+        <div className="fixed inset-0 z-20" onClick={() => { setNotifOpen(false); setScenarioOpen(false); }} />
       )}
     </div>
   );
