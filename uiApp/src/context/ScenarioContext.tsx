@@ -26,18 +26,9 @@ const ScenarioContext = createContext<ScenarioContextType>({
   loading: true,
 });
 
-// Default fallback scenario name when API is unavailable
-const FALLBACK_SCENARIO: Scenario = {
-  id: 'fallback',
-  name: 'drill-2026',
-  type: 'drill',
-  description: 'Default drill scenario',
-  created_at: new Date().toISOString(),
-};
-
 export function ScenarioProvider({ children }: { children: ReactNode }) {
   const { data: apiScenarios, loading } = useApi<Scenario[]>(() => api.getScenarios(), []);
-  const scenarios = apiScenarios ?? [FALLBACK_SCENARIO];
+  const scenarios = apiScenarios ?? [];
 
   const [active, setActiveState] = useState<Scenario | null>(null);
 
@@ -60,7 +51,7 @@ export function ScenarioProvider({ children }: { children: ReactNode }) {
       scenarios,
       active,
       setActive,
-      scenarioName: active?.name ?? FALLBACK_SCENARIO.name,
+      scenarioName: active?.name ?? scenarios[0]?.name ?? '',
       loading,
     }}>
       {children}

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import (
     aggregation_router,
     auth_router,
+    geocoding_router,
     instrument_router,
     labels_router,
     measurements_router,
@@ -159,6 +160,7 @@ app.include_router(missions_router, prefix=API_PREFIX)
 app.include_router(labels_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)
 app.include_router(aggregation_router, prefix=API_PREFIX)
+app.include_router(geocoding_router, prefix=API_PREFIX)
 
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────

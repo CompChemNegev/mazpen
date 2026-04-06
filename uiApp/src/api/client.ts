@@ -21,6 +21,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { ...headers, ...(options?.headers as Record<string, string>) },
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null);
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `API error ${res.status}`);
   }
@@ -34,6 +38,12 @@ export interface Paginated<T> {
   page: number;
   limit: number;
   pages: number;
+}
+
+export interface GeocodingSuggestion {
+  display_name: string;
+  lat: number;
+  lon: number;
 }
 
 function qs(params?: Record<string, string>): string {
@@ -102,6 +112,8 @@ export const api = {
     request<any>(s(scenario, `/visitors/${encodeURIComponent(id)}`)),
   createVisitor: (scenario: string, data: any) =>
     request<any>(s(scenario, '/visitors'), { method: 'POST', body: JSON.stringify(data) }),
+  updateVisitor: (scenario: string, id: string, data: any) =>
+    request<any>(s(scenario, `/visitors/${encodeURIComponent(id)}`), { method: 'PATCH', body: JSON.stringify(data) }),
   getBodyMeasurements: (scenario: string, visitorId: string) =>
     request<any[]>(s(scenario, `/visitors/${encodeURIComponent(visitorId)}/body-measurements`)),
   createBodyMeasurement: (scenario: string, visitorId: string, data: any) =>
@@ -130,4 +142,8 @@ export const api = {
     request<any>(s(scenario, `/aggregation/measurements/aggregate${qs(params)}`)),
   getVisitorDensity: (scenario: string, params?: Record<string, string>) =>
     request<any>(s(scenario, `/aggregation/visitors/density${qs(params)}`)),
+
+  // ── Geocoding ──
+  searchPlaces: (query: string, limit = 5) =>
+    request<GeocodingSuggestion[]>(`/geocoding/search?${new URLSearchParams({ q: query, limit: String(limit) }).toString()}`),
 };

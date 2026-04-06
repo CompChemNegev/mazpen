@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { measurements as mockMeasurements, Measurement, getSeverity, getMeasurementStatus, TYPE_LABELS } from '../data/mockData';
+import { Measurement, getSeverity, getMeasurementStatus, TYPE_LABELS } from '../data/domain';
 import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
@@ -11,9 +11,10 @@ export default function FieldReports() {
   const { t } = useLang();
   const { scenarioName } = useScenario();
   const { data: apiData } = useApi<Paginated<Measurement>>(() => api.getMeasurements(scenarioName), [scenarioName]);
-  const measurements = apiData?.items ?? mockMeasurements;
+  const measurements = apiData?.items ?? [];
 
-  const today = measurements.filter(m => m.timestamp.startsWith('2026-04-05'));
+  const todayPrefix = new Date().toISOString().slice(0, 10);
+  const today = measurements.filter(m => m.timestamp.startsWith(todayPrefix));
   const pending = today.filter(m => getMeasurementStatus(m) === 'pending').length;
   const verified = today.filter(m => getMeasurementStatus(m) === 'verified').length;
   const flagged = today.filter(m => getMeasurementStatus(m) === 'flagged').length;

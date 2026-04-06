@@ -22,6 +22,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setTokenState(null);
+      setError('Session expired. Please sign in again.');
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);

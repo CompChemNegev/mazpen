@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { visitors as mockVisitors, visitorTracks as mockTracks, Visitor, getVisitorName, getVisitorStatus } from '../data/mockData';
+import { Visitor, getVisitorStatus } from '../data/domain';
 import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
@@ -12,7 +12,7 @@ export default function Visitors() {
   const { t } = useLang();
   const { scenarioName } = useScenario();
   const { data: apiVisitors } = useApi<Paginated<Visitor>>(() => api.getVisitors(scenarioName), [scenarioName]);
-  const visitors = apiVisitors?.items ?? mockVisitors;
+  const visitors = apiVisitors?.items ?? [];
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -97,7 +97,7 @@ export default function Visitors() {
                 const d = v.demographics ?? {};
                 const exposure = d.exposure_reading ?? 0;
                 const status = getVisitorStatus(v);
-                const tracks = mockTracks[v.id] ?? [];
+                const movementHistory = Array.isArray(v.demographics?.movement_history) ? v.demographics.movement_history : [];
                 return (
                   <tr key={v.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                     <td className="px-4 py-3">
@@ -111,7 +111,7 @@ export default function Visitors() {
                       </span>
                     </td>
                     <td className="px-4 py-3"><StatusBadge value={status} type="visitor" /></td>
-                    <td className="px-4 py-3 hidden md:table-cell text-gray-600 dark:text-gray-400">{tracks.length} {t('visitors.locations')}</td>
+                    <td className="px-4 py-3 hidden md:table-cell text-gray-600 dark:text-gray-400">{movementHistory.length} {t('visitors.locations')}</td>
                     <td className="px-4 py-3 text-right">
                       <Link to={'/visitors/' + v.id} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                         <Eye className="w-3 h-3" /> {t('visitors.view')}

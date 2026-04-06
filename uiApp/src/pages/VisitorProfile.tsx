@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import MapView from '../components/MapView';
 import StatusBadge from '../components/StatusBadge';
-import { visitors as mockVisitors, visitorTracks as mockTracks, bodyMeasurementsMap as mockBodyMeasurements, Visitor, VisitorTrack, BodyMeasurement, getVisitorName, getVisitorStatus, trackLat, trackLng } from '../data/mockData';
+import { Visitor, BodyMeasurement, getVisitorName, getVisitorStatus } from '../data/domain';
 import { api } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
@@ -11,17 +11,22 @@ import {
 } from 'lucide-react';
 import { useLang } from '../context/LangContext';
 
+type MovementHistoryItem = {
+  location?: string;
+  timestamp?: string;
+  lat?: number;
+  lon?: number;
+};
+
 export default function VisitorProfile() {
   const { t } = useLang();
   const { id } = useParams<{ id: string }>();
   const { scenarioName } = useScenario();
   const { data: apiVisitor } = useApi<Visitor | null>(() => id ? api.getVisitor(scenarioName, id) : Promise.resolve(null), [scenarioName, id]);
-  const { data: apiTracks } = useApi<VisitorTrack[]>(() => id ? api.getVisitorTracks(scenarioName, id) : Promise.resolve([]), [scenarioName, id]);
   const { data: apiBodyMeasurements } = useApi<BodyMeasurement[]>(() => id ? api.getBodyMeasurements(scenarioName, id) : Promise.resolve([]), [scenarioName, id]);
 
-  const visitor = apiVisitor ?? mockVisitors.find(v => v.id === id) ?? null;
-  const tracks = apiTracks ?? (id ? mockTracks[id] ?? [] : []);
-  const bodyMeasurements = apiBodyMeasurements ?? (id ? mockBodyMeasurements[id] ?? [] : []);
+  const visitor = apiVisitor ?? null;
+  const bodyMeasurements = apiBodyMeasurements ?? [];
 
   if (!visitor) {
     return (
@@ -35,25 +40,35 @@ export default function VisitorProfile() {
   }
 
   const d = visitor.demographics ?? {};
+  const movementHistory = Array.isArray(d.movement_history) ? d.movement_history as MovementHistoryItem[] : [];
   const status = getVisitorStatus(visitor);
   const exposure = d.exposure_reading ?? 0;
   const vital = d.vital_signs ?? {};
   const exposureColor = exposure >= 1 ? 'text-red-500' : exposure >= 0.3 ? 'text-yellow-500' : 'text-green-500';
 
-  const mapMarkers = tracks.map((tk, i) => ({
-    lat: trackLat(tk), lng: trackLng(tk),
-    color: i === 0 ? '#22c55e' : i === tracks.length - 1 ? '#ef4444' : '#8b5cf6',
-    size: i === 0 || i === tracks.length - 1 ? 16 : 12,
-    popup: '<strong>' + (tk.label ?? 'Track Point') + '</strong><br/>' + new Date(tk.recorded_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+  const timelinePoints = movementHistory
+    .filter((item): item is Required<Pick<MovementHistoryItem, 'lat' | 'lon'>> & MovementHistoryItem => typeof item.lat === 'number' && typeof item.lon === 'number')
+    .map(item => ({
+      lat: item.lat,
+      lon: item.lon,
+      label: item.location ?? 'Location',
+      recorded_at: item.timestamp ?? visitor.created_at,
+    }));
+
+  const mapMarkers = timelinePoints.map((tk, i) => ({
+    lat: tk.lat, lng: tk.lon,
+    color: i === 0 ? '#22c55e' : i === timelinePoints.length - 1 ? '#ef4444' : '#8b5cf6',
+    size: i === 0 || i === timelinePoints.length - 1 ? 16 : 12,
+    popup: '<strong>' + tk.label + '</strong><br/>' + new Date(tk.recorded_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
   }));
 
-  const mapPath = tracks.length > 0 ? [{
-    points: tracks.map(tk => [trackLat(tk), trackLng(tk)] as [number, number]),
+  const mapPath = timelinePoints.length > 0 ? [{
+    points: timelinePoints.map(tk => [tk.lat, tk.lon] as [number, number]),
     color: '#8b5cf6', weight: 3,
   }] : [];
 
-  const centerLat = tracks.length > 0 ? tracks.reduce((s, tk) => s + trackLat(tk), 0) / tracks.length : 38.9072;
-  const centerLng = tracks.length > 0 ? tracks.reduce((s, tk) => s + trackLng(tk), 0) / tracks.length : -77.0369;
+  const centerLat = timelinePoints.length > 0 ? timelinePoints.reduce((s, tk) => s + tk.lat, 0) / timelinePoints.length : 38.9072;
+  const centerLng = timelinePoints.length > 0 ? timelinePoints.reduce((s, tk) => s + tk.lon, 0) / timelinePoints.length : -77.0369;
 
   return (
     <div>
@@ -65,6 +80,9 @@ export default function VisitorProfile() {
           <h1 className="text-xl font-bold">{getVisitorName(visitor)}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Visitor Profile · {visitor.id}</p>
         </div>
+        <Link to={`/visitors/${visitor.id}/edit`} className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          Edit intake
+        </Link>
         <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700">
           <Download className="w-4 h-4" /> {t('profile.exportReport')}
         </button>
@@ -176,22 +194,22 @@ export default function VisitorProfile() {
         <div className="relative">
           <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-gray-200 dark:bg-gray-700" />
           <div className="space-y-0">
-            {tracks.map((tk, i) => {
+            {timelinePoints.map((tk, i) => {
               const isFirst = i === 0;
-              const isLast = i === tracks.length - 1;
+              const isLast = i === timelinePoints.length - 1;
               const dotColor = isFirst ? 'bg-green-500' : isLast ? 'bg-red-500' : 'bg-purple-500';
               return (
                 <div key={i} className="flex gap-4 py-3 relative">
                   <div className={`w-[10px] h-[10px] rounded-full ${dotColor} mt-1.5 shrink-0 z-10 ring-4 ring-white dark:ring-gray-800 ml-[14px]`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm truncate">{tk.label ?? 'Track Point'}</span>
+                      <span className="font-medium text-sm truncate">{tk.label}</span>
                       <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 font-mono">
                         {new Date(tk.recorded_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-                      {trackLat(tk).toFixed(4)}, {trackLng(tk).toFixed(4)}
+                      {tk.lat.toFixed(4)}, {tk.lon.toFixed(4)}
                     </div>
                   </div>
                 </div>

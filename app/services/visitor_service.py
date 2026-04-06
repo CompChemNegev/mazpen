@@ -11,7 +11,7 @@ from app.repositories.visitor_repository import (
     VisitorRepository,
     VisitorTrackRepository,
 )
-from app.schemas.visitor import BodyMeasurementCreate, VisitorCreate, VisitorTrackCreate
+from app.schemas.visitor import BodyMeasurementCreate, VisitorCreate, VisitorIntakeUpdate, VisitorTrackCreate
 from app.utils.exceptions import NotFoundException
 from app.utils.filtering import wkb_to_geojson
 from app.utils.pagination import PaginationParams
@@ -33,6 +33,34 @@ class VisitorService:
         visitor = await self.visitor_repo.get_by_id(visitor_id, scenario_id=scenario_id)
         if not visitor:
             raise NotFoundException("Visitor not found")
+        return visitor
+
+    async def update_visitor_intake(
+        self,
+        scenario_id: uuid.UUID,
+        visitor_id: uuid.UUID,
+        data: VisitorIntakeUpdate,
+    ) -> Visitor:
+        visitor = await self.get_visitor(scenario_id, visitor_id)
+        visitor.demographics = data.demographics
+        visitor.tags = data.tags
+
+        existing_body_measurements = await self.body_repo.get_for_visitor(visitor_id, scenario_id)
+        for measurement in existing_body_measurements:
+            await self.body_repo.delete(measurement)
+
+        existing_tracks = await self.track_repo.get_for_visitor(visitor_id, scenario_id)
+        for track in existing_tracks:
+            await self.track_repo.delete(track)
+
+        for measurement in data.body_measurements:
+            await self.body_repo.create_body_measurement(visitor_id, measurement.model_dump())
+
+        if data.track_geom is not None:
+            await self.track_repo.create_track(visitor_id, data.track_geom)
+
+        await self.db.flush()
+        await self.db.refresh(visitor)
         return visitor
 
     async def list_visitors(

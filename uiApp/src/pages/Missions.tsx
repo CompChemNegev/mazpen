@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import L from 'leaflet';
 import MapView, { MapPolygon, MapMarker } from '../components/MapView';
 import StatusBadge from '../components/StatusBadge';
-import { missions as mockMissions, instruments as mockInstruments, MAP_CENTER, Mission, Instrument, missionAreaToLatLng } from '../data/mockData';
+import { MAP_CENTER, Mission, Instrument, missionAreaToLatLng } from '../data/domain';
 import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
@@ -14,16 +14,18 @@ export default function Missions() {
   const { scenarioName } = useScenario();
   const { data: apiMissions } = useApi<Paginated<Mission>>(() => api.getMissions(scenarioName), [scenarioName]);
   const { data: apiInstruments } = useApi<Instrument[]>(() => api.getInstruments(scenarioName), [scenarioName]);
-  const missions = apiMissions?.items ?? mockMissions;
-  const instruments = apiInstruments ?? mockInstruments;
+  const missions = apiMissions?.items ?? [];
+  const instruments = apiInstruments ?? [];
 
   const [selectedMission, setSelectedMission] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [missionName, setMissionName] = useState('');
   const [missionDescription, setMissionDescription] = useState('');
+  const [missionStatus, setMissionStatus] = useState<Mission['status']>('planned');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [editingMissionId, setEditingMissionId] = useState<string | null>(null);
   const drawMapRef = useRef<L.Map | null>(null);
 
   const handleDrawMapReady = useCallback((map: L.Map) => {
@@ -37,12 +39,34 @@ export default function Missions() {
     setDrawPoints([]);
     setMissionName('');
     setMissionDescription('');
+    setMissionStatus('planned');
     setCreateError(null);
+    setEditingMissionId(null);
     drawMapRef.current = null;
     setShowCreateModal(false);
   };
 
-  const handleCreateMission = async () => {
+  const openCreateModal = () => {
+    resetModal();
+    setShowCreateModal(true);
+  };
+
+  const openEditModal = (mission: Mission) => {
+    const points = missionAreaToLatLng(mission);
+    const normalizedPoints = points.length > 1 && points[0][0] === points[points.length - 1][0] && points[0][1] === points[points.length - 1][1]
+      ? points.slice(0, -1)
+      : points;
+
+    setMissionName(mission.name);
+    setMissionDescription(mission.description ?? '');
+    setMissionStatus(mission.status);
+    setDrawPoints(normalizedPoints);
+    setCreateError(null);
+    setEditingMissionId(mission.id);
+    setShowCreateModal(true);
+  };
+
+  const handleSaveMission = async () => {
     if (drawPoints.length < 3 || !missionName.trim()) return;
 
     const ring: [number, number][] = drawPoints.map(([lat, lng]) => [lng, lat]);
@@ -55,19 +79,26 @@ export default function Missions() {
     setCreating(true);
     setCreateError(null);
     try {
-      await api.createMission(scenarioName, {
+      const payload = {
         name: missionName.trim(),
         description: missionDescription.trim() || null,
-        status: 'planned',
+        status: missionStatus,
         target_area: {
           type: 'Polygon',
           coordinates: [ring],
         },
-      });
+      };
+
+      if (editingMissionId) {
+        await api.updateMission(scenarioName, editingMissionId, payload);
+      } else {
+        await api.createMission(scenarioName, payload);
+      }
+
       resetModal();
       window.location.reload();
     } catch (e: any) {
-      setCreateError(e?.message || 'Failed to create mission');
+      setCreateError(e?.message || `Failed to ${editingMissionId ? 'update' : 'create'} mission`);
     } finally {
       setCreating(false);
     }
@@ -99,7 +130,7 @@ export default function Missions() {
           <h1 className="text-2xl font-bold">{t('missions.title')}</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm">{t('missions.subtitle')}</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm">
+        <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm">
           <Plus className="w-4 h-4" /> {t('missions.newMission')}
         </button>
       </div>
@@ -154,6 +185,9 @@ export default function Missions() {
                   <StatusBadge value={selected.status} type="mission" />
                 </div>
               </div>
+              <button onClick={() => openEditModal(selected)} className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                Edit mission
+              </button>
             </div>
           )}
         </div>
@@ -169,7 +203,7 @@ export default function Missions() {
         <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" style={{ isolation: 'isolate' }}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col relative z-[10000]">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
-              <h2 className="text-lg font-bold">{t('missions.createTitle')}</h2>
+              <h2 className="text-lg font-bold">{editingMissionId ? 'Edit mission' : t('missions.createTitle')}</h2>
               <button onClick={resetModal} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5 text-gray-400" /></button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
@@ -192,6 +226,19 @@ export default function Missions() {
                   placeholder={t('missions.objectivesPlaceholder')}
                   className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Status</label>
+                <select
+                  value={missionStatus}
+                  onChange={e => setMissionStatus(e.target.value as Mission['status'])}
+                  className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="planned">Planned</option>
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -230,11 +277,11 @@ export default function Missions() {
               {createError && <p className="text-sm text-red-500 mr-auto">{createError}</p>}
               <button onClick={resetModal} className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">{t('missions.cancel')}</button>
               <button
-                onClick={handleCreateMission}
+                onClick={handleSaveMission}
                 disabled={drawPoints.length < 3 || !missionName.trim() || creating}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${drawPoints.length >= 3 && missionName.trim() && !creating ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'}`}
               >
-                {creating ? 'Creating...' : t('missions.create')}
+                {creating ? (editingMissionId ? 'Saving...' : 'Creating...') : (editingMissionId ? 'Save changes' : t('missions.create'))}
               </button>
             </div>
           </div>

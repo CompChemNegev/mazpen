@@ -3,11 +3,18 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
 import { useScenario } from '../context/ScenarioContext';
-import { alerts as mockAlerts, Alert } from '../data/mockData';
 import {
   FileText, Map, Globe, Users, BarChart3, Settings,
   Bell, Moon, Sun, Menu, X, ChevronDown, Shield, LogOut, User, Languages
 } from 'lucide-react';
+
+type Alert = {
+  id: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  timestamp: string;
+  read: boolean;
+};
 
 const navKeys = [
   { to: '/field-reports', icon: FileText, key: 'nav.fieldReports' },
@@ -27,7 +34,7 @@ export default function GlobalLayout({ children }: { children: ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
 
-  const alerts = mockAlerts;
+  const alerts: Alert[] = [];
   const unreadAlerts = alerts.filter(a => !a.read).length;
 
   const isGIS = location.pathname === '/gis-dashboard';

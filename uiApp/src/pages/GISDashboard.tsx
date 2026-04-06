@@ -2,13 +2,11 @@ import { useState, useMemo } from 'react';
 import MapView, { MapMarker, MapPath, MapPolygon } from '../components/MapView';
 import StatusBadge from '../components/StatusBadge';
 import {
-  measurements as mockMeasurements, missions as mockMissions, visitors as mockVisitors,
-  instruments as mockInstruments, alerts as mockAlerts, visitorTracks as mockTracks,
   MAP_CENTER, SEVERITY_COLORS, TYPE_LABELS,
-  Measurement, Mission, Visitor, Instrument, Alert,
+  Measurement, Mission, Visitor, Instrument,
   getSeverity, getLat, getLng, getMeasurementStatus, getVisitorStatus,
-  missionAreaToLatLng, trackLat, trackLng,
-} from '../data/mockData';
+  missionAreaToLatLng,
+} from '../data/domain';
 import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
@@ -27,6 +25,32 @@ const typeIcons: Record<string, typeof Radio> = {
   noise: Volume2,
 };
 
+type Alert = {
+  id: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  timestamp: string;
+  read: boolean;
+};
+
+type VisitorTrackPoint = {
+  lat: number;
+  lon: number;
+};
+
+function getVisitorTrackPoints(visitor: Visitor): VisitorTrackPoint[] {
+  const movementHistory = Array.isArray(visitor.demographics?.movement_history)
+    ? visitor.demographics.movement_history
+    : [];
+
+  return movementHistory
+    .filter(
+      (item: any): item is { lat: number; lon: number } =>
+        typeof item?.lat === 'number' && typeof item?.lon === 'number',
+    )
+    .map((item: any) => ({ lat: item.lat, lon: item.lon }));
+}
+
 export default function GISDashboard() {
   const { t } = useLang();
   const { scenarioName } = useScenario();
@@ -34,11 +58,11 @@ export default function GISDashboard() {
   const { data: apiMissions } = useApi<Paginated<Mission>>(() => api.getMissions(scenarioName), [scenarioName]);
   const { data: apiVisitors } = useApi<Paginated<Visitor>>(() => api.getVisitors(scenarioName), [scenarioName]);
   const { data: apiInstruments } = useApi<Instrument[]>(() => api.getInstruments(scenarioName), [scenarioName]);
-  const measurements = apiMeasurements?.items ?? mockMeasurements;
-  const missions = apiMissions?.items ?? mockMissions;
-  const visitors = apiVisitors?.items ?? mockVisitors;
-  const instruments = apiInstruments ?? mockInstruments;
-  const alerts = mockAlerts;
+  const measurements = apiMeasurements?.items ?? [];
+  const missions = apiMissions?.items ?? [];
+  const visitors = apiVisitors?.items ?? [];
+  const instruments = apiInstruments ?? [];
+  const alerts: Alert[] = [];
 
   const [showMeasurements, setShowMeasurements] = useState(true);
   const [showMissions, setShowMissions] = useState(true);
@@ -87,9 +111,9 @@ export default function GISDashboard() {
     }
     if (showVisitors) {
       visitors.forEach(v => {
-        const tracks = mockTracks[v.id] ?? [];
+        const tracks = getVisitorTrackPoints(v);
         tracks.forEach(tk => {
-          result.push({ lat: trackLat(tk), lng: trackLng(tk), color: '#8b5cf6', size: 8 });
+          result.push({ lat: tk.lat, lng: tk.lon, color: '#8b5cf6', size: 8 });
         });
       });
     }
@@ -99,9 +123,9 @@ export default function GISDashboard() {
   const paths: MapPath[] = useMemo(() => {
     if (!showVisitors) return [];
     return visitors.map(v => {
-      const tracks = mockTracks[v.id] ?? [];
+      const tracks = getVisitorTrackPoints(v);
       return {
-        points: tracks.map(tk => [trackLat(tk), trackLng(tk)] as [number, number]),
+        points: tracks.map(tk => [tk.lat, tk.lon] as [number, number]),
         color: '#8b5cf6', weight: 2, dashArray: '6 4',
       };
     }).filter(p => p.points.length > 0);

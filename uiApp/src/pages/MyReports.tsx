@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { measurements as mockMeasurements, TYPE_LABELS, Measurement, getSeverity, getMeasurementStatus, getLat, getLng } from '../data/mockData';
+import { TYPE_LABELS, Measurement, getSeverity, getMeasurementStatus, getLat, getLng } from '../data/domain';
 import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
@@ -12,7 +12,7 @@ export default function MyReports() {
   const { t } = useLang();
   const { scenarioName } = useScenario();
   const { data: apiData } = useApi<Paginated<Measurement>>(() => api.getMeasurements(scenarioName), [scenarioName]);
-  const measurements = apiData?.items ?? mockMeasurements;
+  const measurements = apiData?.items ?? [];
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -79,8 +79,6 @@ export default function MyReports() {
           const status = getMeasurementStatus(m);
           const typeName = m.measurement_type?.name ?? '';
           const isExpanded = expanded === m.id;
-          const isRecent = Date.now() - new Date(m.timestamp).getTime() < 3600000 * 4;
-
           return (
             <div key={m.id}>
               <button
@@ -130,11 +128,9 @@ export default function MyReports() {
                       <div className="text-gray-700 dark:text-gray-300">{m.metadata?.notes}</div>
                     </div>
                   </div>
-                  {isRecent && (
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
-                      <Edit className="w-3.5 h-3.5" /> {t('myReports.editReport')}
-                    </button>
-                  )}
+                  <Link to={`/field-reports/${m.id}/edit`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                    <Edit className="w-3.5 h-3.5" /> {t('myReports.editReport')}
+                  </Link>
                 </div>
               )}
             </div>

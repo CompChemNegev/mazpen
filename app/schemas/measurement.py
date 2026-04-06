@@ -63,8 +63,10 @@ class MeasurementCreate(BaseModel):
 class MeasurementUpdate(BaseModel):
     timestamp: Optional[datetime] = None
     location: Optional[dict[str, Any]] = None
+    measurement_type_id: Optional[uuid.UUID] = None
     value: Optional[float] = None
     unit: Optional[str] = Field(default=None, max_length=50)
+    instrument_id: Optional[uuid.UUID] = None
     mission_id: Optional[uuid.UUID] = None
     metadata: Optional[dict[str, Any]] = None
 

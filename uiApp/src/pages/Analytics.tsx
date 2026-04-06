@@ -1,18 +1,21 @@
 import {
-  measurements as mockMeasurements, missions as mockMissions, visitors as mockVisitors,
-  instruments as mockInstruments, alerts as mockAlerts,
-  TYPE_LABELS, Measurement, Mission, Visitor, Instrument, Alert,
-  getSeverity, getMeasurementStatus,
-} from '../data/mockData';
+  TYPE_LABELS, Measurement, Mission, Visitor, Instrument,
+  getSeverity,
+} from '../data/domain';
 import { api, Paginated } from '../api/client';
 import { useApi } from '../api/useApi';
 import { useScenario } from '../context/ScenarioContext';
-import StatusBadge from '../components/StatusBadge';
 import {
   BarChart3, Activity, Users, Map, AlertTriangle, TrendingUp,
   ArrowUpRight, Clock, Radio, Wind, Droplets, Thermometer, Volume2
 } from 'lucide-react';
 import { useLang } from '../context/LangContext';
+
+type Alert = {
+  id: string;
+  severity: 'info' | 'warning' | 'critical';
+  read: boolean;
+};
 
 const typeIcons: Record<string, typeof Radio> = {
   radiation: Radio,
@@ -29,14 +32,15 @@ export default function Analytics() {
   const { data: apiMissions } = useApi<Paginated<Mission>>(() => api.getMissions(scenarioName), [scenarioName]);
   const { data: apiVisitors } = useApi<Paginated<Visitor>>(() => api.getVisitors(scenarioName), [scenarioName]);
   const { data: apiInstruments } = useApi<Instrument[]>(() => api.getInstruments(scenarioName), [scenarioName]);
-  const measurements = apiMeasurements?.items ?? mockMeasurements;
-  const missions = apiMissions?.items ?? mockMissions;
-  const visitors = apiVisitors?.items ?? mockVisitors;
-  const instruments = apiInstruments ?? mockInstruments;
-  const alerts = mockAlerts;
+  const measurements = apiMeasurements?.items ?? [];
+  const missions = apiMissions?.items ?? [];
+  const visitors = apiVisitors?.items ?? [];
+  const instruments = apiInstruments ?? [];
+  const alerts: Alert[] = [];
 
   const totalMeasurements = measurements.length;
-  const todayMeasurements = measurements.filter(m => m.timestamp.startsWith('2026-04-05')).length;
+  const todayPrefix = new Date().toISOString().slice(0, 10);
+  const todayMeasurements = measurements.filter(m => m.timestamp.startsWith(todayPrefix)).length;
   const activeMissions = missions.filter(m => m.status === 'active').length;
   const flaggedVisitors = visitors.filter(v => v.tags?.includes('flagged')).length;
   const criticalAlerts = alerts.filter(a => a.severity === 'critical' && !a.read).length;
@@ -138,7 +142,7 @@ export default function Analytics() {
                     </div>
                     <div className="flex items-center gap-3 mt-1">
                       <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: (bt.count / totalMeasurements) * 100 + '%' }} />
+                        <div className="h-full bg-blue-500 rounded-full" style={{ width: totalMeasurements > 0 ? (bt.count / totalMeasurements) * 100 + '%' : '0%' }} />
                       </div>
                       {bt.dangerCount > 0 && <span className="text-xs text-red-500 font-medium shrink-0">{bt.dangerCount} danger</span>}
                     </div>

@@ -1,21 +1,51 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: mazpen_db
+      POSTGRES_USER: mazpen
+      POSTGRES_PASSWORD: mazpen
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mazpen -d mazpen_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   api:
     build: .
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://mazpen:mazpen@host.docker.internal:5433/mazpen_db
-      SYNC_DATABASE_URL: postgresql+psycopg2://mazpen:mazpen@host.docker.internal:5433/mazpen_db
-      REDIS_URL: redis://host.docker.internal:6379
+      DATABASE_URL: postgresql+asyncpg://mazpen:mazpen@localhost:5433/mazpen_db
+      SYNC_DATABASE_URL: postgresql+psycopg2://mazpen:mazpen@localhost:5433/mazpen_db
+      REDIS_URL: redis://localhost:6379
       SECRET_KEY: change-this-to-a-very-long-random-secret-key-in-production
       DEBUG: "true"
+    depends_on:
+      - postgres
+      - redis
     volumes:
       - .:/app
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
 
   ui:
     build: ./uiApp
@@ -32,3 +62,5 @@ services:
 
 volumes:
   ui_node_modules:
+  postgres_data:
+  redis_data:

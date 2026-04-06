@@ -12,6 +12,13 @@ class VisitorCreate(BaseModel):
     tags: Optional[list[str]] = None
 
 
+class VisitorIntakeUpdate(BaseModel):
+    demographics: dict[str, Any] = Field(default_factory=dict)
+    tags: Optional[list[str]] = None
+    body_measurements: list[BodyMeasurementCreate] = Field(default_factory=list)
+    track_geom: Optional[dict[str, Any]] = None
+
+
 class VisitorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

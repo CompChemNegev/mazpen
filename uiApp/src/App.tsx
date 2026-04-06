@@ -31,11 +31,13 @@ function AuthenticatedApp() {
             <Route path="/" element={<Navigate to="/field-reports" replace />} />
             <Route path="/field-reports" element={<FieldReports />} />
             <Route path="/field-reports/new" element={<NewMeasurement />} />
+            <Route path="/field-reports/:id/edit" element={<NewMeasurement />} />
             <Route path="/field-reports/my-reports" element={<MyReports />} />
             <Route path="/gis-dashboard" element={<GISDashboard />} />
             <Route path="/missions" element={<Missions />} />
             <Route path="/visitors" element={<Visitors />} />
             <Route path="/visitors/intake" element={<VisitorIntake />} />
+            <Route path="/visitors/:id/edit" element={<VisitorIntake />} />
             <Route path="/visitors/:id" element={<VisitorProfile />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />
